@@ -8,6 +8,7 @@ import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -787,7 +788,7 @@ private fun LiveGuideScreen(
             EmptyState(if (state.loading) "Loading…" else "No channels", "Choose another category.", Modifier.weight(1f))
         } else {
             BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
-                val channelColumnWidth = 160.dp
+                val channelColumnWidth = 184.dp
                 val headerHeight = 30.dp
                 val footerHeight = 18.dp
                 val rowGap = 3.dp
@@ -945,14 +946,39 @@ private fun GuideRow(
                     if (focused) colors.accent.copy(alpha = .95f) else Color.White.copy(alpha = .04f),
                     RoundedCornerShape(7.dp),
                 )
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Artwork(channel, Modifier.size(34.dp), live = true, transparentLive = true)
-            Spacer(Modifier.width(7.dp))
+            Artwork(channel, Modifier.size(30.dp), live = true, transparentLive = true)
+            Spacer(Modifier.width(6.dp))
             Column(Modifier.weight(1f)) {
-                Text(channel.name, color = colors.text, fontSize = 9.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                channel.channelNumber?.let { Text("CH $it", color = colors.muted, fontSize = 7.5.sp) }
+                if (focused) {
+                    Text(
+                        channel.name,
+                        color = colors.text,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip,
+                        modifier = Modifier.fillMaxWidth().basicMarquee(
+                            iterations = Int.MAX_VALUE,
+                            initialDelayMillis = 1_200,
+                            repeatDelayMillis = 1_000,
+                            velocity = 18.dp,
+                        ),
+                    )
+                } else {
+                    Text(
+                        channel.name,
+                        color = colors.text,
+                        fontSize = 9.5.sp,
+                        lineHeight = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                channel.channelNumber?.let { Text("CH $it", color = colors.muted, fontSize = 7.sp, maxLines = 1) }
             }
             if (favorite) Text("♥", color = colors.danger, fontSize = 10.sp)
         }

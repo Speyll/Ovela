@@ -2096,6 +2096,26 @@ function updateMediaCatalog(kind) {
     '</div>';
   }
 
+  function updateStationMarquee(button, enabled) {
+    var label = button && button.querySelector('.v07-station-copy strong');
+    if (!label) return;
+    label.classList.remove('is-overflowing', 'is-marquee-probe');
+    label.style.removeProperty('--v07-marquee-distance');
+    label.style.removeProperty('--v07-marquee-duration');
+    if (!enabled) return;
+    label.classList.add('is-marquee-probe');
+    requestAnimationFrame(function () {
+      if (!button.matches(':focus')) return label.classList.remove('is-marquee-probe');
+      var distance = Math.max(0, label.scrollWidth - label.clientWidth);
+      label.classList.remove('is-marquee-probe');
+      if (distance > 1) {
+        label.style.setProperty('--v07-marquee-distance', distance + 'px');
+        label.style.setProperty('--v07-marquee-duration', Math.max(8, distance / 18) + 's');
+        label.classList.add('is-overflowing');
+      }
+    });
+  }
+
   function renderLiveWindow(focus) {
     var items = App.currentFilteredItems.live || [];
     var host = document.getElementById('v07GuideRows');
@@ -2123,7 +2143,9 @@ function updateMediaCatalog(kind) {
         var index = Number(button.dataset.v07LiveIndex);
         V.liveIndex = index;
         V.selectedKey.live = itemKey(items[index], 'live');
+        updateStationMarquee(button, true);
       });
+      button.addEventListener('blur', function () { updateStationMarquee(button, false); });
       button.addEventListener('click', function () {
         var channel = items[Number(button.dataset.v07LiveIndex)];
         if (channel) App.playMedia(channel, 'live', items);

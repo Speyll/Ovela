@@ -6836,3 +6836,59 @@
     rgba(1,2,4,.995) 64%,
     rgba(1,2,4,.97) 100%) !important;
 }
+
+/* Give provider channel names room without changing the category wheel. */
+.v07-guide-header,
+.v07-guide-row {
+  grid-template-columns:300px minmax(0,1fr) !important;
+}
+.v07-station {
+  padding:0 12px !important;
+}
+.v07-station-logo {
+  flex-basis:52px !important;
+  width:52px !important;
+  height:52px !important;
+  border-radius:13px !important;
+}
+.v07-station-logo img {
+  width:44px !important;
+  height:44px !important;
+}
+.v07-station-copy {
+  margin-left:10px !important;
+  overflow:hidden;
+}
+.v07-station-copy strong {
+  max-height:42px;
+  font-size:17px !important;
+  line-height:21px !important;
+  white-space:normal !important;
+  overflow:hidden;
+  display:-webkit-box !important;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  text-overflow:ellipsis;
+}
+.v07-station-copy span {
+  margin-top:2px !important;
+  font-size:12px !important;
+  line-height:14px !important;
+}
+.v07-station-copy strong.is-marquee-probe,
+.v07-station-copy strong.is-overflowing {
+  display:block !important;
+  max-height:none;
+  white-space:nowrap !important;
+  text-overflow:clip;
+  -webkit-line-clamp:unset;
+}
+.v07-station-copy strong.is-overflowing {
+  width:max-content;
+  min-width:100%;
+  animation:v07-channel-name-marquee var(--v07-marquee-duration, 12s) linear 1.2s infinite alternate;
+}
+@keyframes v07-channel-name-marquee {
+  from { transform:translateX(0); }
+  to { transform:translateX(calc(-1 * var(--v07-marquee-distance, 0px))); }
+}
