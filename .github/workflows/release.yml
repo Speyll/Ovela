@@ -36,7 +36,16 @@ jobs:
           npm run check:android-toolchain
           npm run check:webos
           npm run check:bridge
+          npm run test:bridge
           npm run test:core
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Run production webOS browser tests
+        run: |
+          python -m pip install -r apps/webos/tests/requirements.txt
+          python -m playwright install --with-deps chromium
+          npm run test:webos
       - name: Build webOS
         run: npm run build:webos
       - name: Build Android TV debug artifact

@@ -12,9 +12,15 @@ import org.json.JSONObject
  * metadata and compact episode records.
  */
 class MediaCacheStore(context: Context) {
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private var scope = "signed-out"
+    private val prefs get() = appContext.getSharedPreferences("$PREFS_NAME.$scope", Context.MODE_PRIVATE)
 
     data class SeriesPayload(val series: CatalogItem, val episodes: List<CatalogItem>)
+
+    fun selectProvider(credentials: com.xtreamlytv.androidtv.model.Credentials) {
+        scope = providerScope(credentials)
+    }
 
     fun getMovie(id: String): CatalogItem? = getItem("movie:$id", MOVIE_TTL_MS)
 
@@ -36,9 +42,11 @@ class MediaCacheStore(context: Context) {
     }
 
     fun putSeries(series: CatalogItem, episodes: List<CatalogItem>) {
+        // A truncated episode list must never be treated as a complete cache hit.
+        if (!shouldCacheSeriesEpisodes(episodes.size)) return
         val payload = JSONObject()
             .put("item", itemToJson(series))
-            .put("episodes", JSONArray().also { array -> episodes.take(MAX_EPISODES_PER_SERIES).forEach { array.put(itemToJson(it)) } })
+            .put("episodes", JSONArray().also { array -> episodes.forEach { array.put(itemToJson(it)) } })
         putEntry("series:${series.id}", payload, MAX_SERIES, "series:")
     }
 
@@ -203,3 +211,5 @@ class MediaCacheStore(context: Context) {
         const val SERIES_TTL_MS = 3L * 24 * 60 * 60 * 1000
     }
 }
+
+internal fun shouldCacheSeriesEpisodes(count: Int): Boolean = count in 0..320

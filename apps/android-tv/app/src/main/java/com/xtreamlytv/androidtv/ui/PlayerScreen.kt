@@ -42,6 +42,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -67,6 +70,7 @@ fun PlayerScreen(
     onEnded: () -> Unit,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val focusRequester = remember { FocusRequester() }
     val subtitleOptionFocus = remember(request.item.id) { FocusRequester() }
     val favoriteOptionFocus = remember(request.item.id) { FocusRequester() }
@@ -88,7 +92,8 @@ fun PlayerScreen(
                 .buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled)
                 .build()
-            if (request.startPositionMs > 0L && request.item.type != ContentType.LIVE) seekTo(request.startPositionMs)
+            val resumePosition = position.coerceAtLeast(request.startPositionMs)
+            if (resumePosition > 0L && request.item.type != ContentType.LIVE) seekTo(resumePosition)
             playWhenReady = true
             prepare()
         }
@@ -127,6 +132,25 @@ fun PlayerScreen(
             player.removeListener(listener)
             player.release()
         }
+    }
+
+    DisposableEffect(player, lifecycleOwner) {
+        var resumeAfterStart = false
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    resumeAfterStart = player.playWhenReady
+                    player.pause()
+                }
+                Lifecycle.Event.ON_START -> if (resumeAfterStart) {
+                    player.play()
+                    resumeAfterStart = false
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     LaunchedEffect(player) {
@@ -236,6 +260,7 @@ fun PlayerScreen(
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
+                    keepScreenOn = true
                     useController = false
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)

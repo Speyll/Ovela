@@ -18,7 +18,28 @@ import org.json.JSONObject
  * favorites, favorite groups, recent items, and playback progress.
  */
 class LocalStateStore(context: Context) {
-    private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val legacyPreferences = appContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+    private var preferences = legacyPreferences
+
+    fun selectProvider(credentials: com.xtreamlytv.androidtv.model.Credentials) {
+        val scoped = appContext.getSharedPreferences("$PREFERENCES_NAME.${providerScope(credentials)}", Context.MODE_PRIVATE)
+        if (scoped.all.isEmpty() && preferences === legacyPreferences) {
+            val edit = scoped.edit()
+            preferences.all.forEach { (key, value) ->
+                when (value) {
+                    is String -> edit.putString(key, value)
+                    is Int -> edit.putInt(key, value)
+                    is Long -> edit.putLong(key, value)
+                    is Float -> edit.putFloat(key, value)
+                    is Boolean -> edit.putBoolean(key, value)
+                    is Set<*> -> @Suppress("UNCHECKED_CAST") edit.putStringSet(key, value as Set<String>)
+                }
+            }
+            edit.apply()
+        }
+        preferences = scoped
+    }
 
     fun load(): LocalAppState = runCatching {
         val groups = parseGroups(preferences.getString(KEY_GROUPS, null)).take(24)

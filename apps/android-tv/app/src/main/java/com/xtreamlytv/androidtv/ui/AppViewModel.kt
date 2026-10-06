@@ -36,6 +36,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
@@ -109,17 +111,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val movieDetailJobs = mutableMapOf<String, Job>()
     private val categoryCache = LinkedHashMap<String, List<CatalogItem>>(16, 0.75f, true)
     private var catalogRequestId = 0L
+    private var connectionGeneration = 0L
+    private val epgUpdatedAt = mutableMapOf<String, Long>()
+    private val persistenceMutex = Mutex()
     private val lastFocusByArea = mutableMapOf<String, FocusRequest>()
     private val _state = MutableStateFlow(AppUiState())
     val state: StateFlow<AppUiState> = _state.asStateFlow()
 
     init {
         viewModelScope.launch {
-            val (localResult, credentialsResult) = coroutineScope {
-                val localDeferred = async(Dispatchers.IO) { runCatching { localStateStore.load() } }
-                val credentialsDeferred = async(Dispatchers.IO) { runCatching { credentialsStore.load() } }
-                localDeferred.await() to credentialsDeferred.await()
+            val credentialsResult = withContext(Dispatchers.IO) { runCatching { credentialsStore.load() } }
+            val savedCredentials = credentialsResult.getOrNull()
+            if (savedCredentials != null) {
+                localStateStore.selectProvider(savedCredentials)
+                mediaCacheStore.selectProvider(savedCredentials)
             }
+            val localResult = withContext(Dispatchers.IO) { runCatching { localStateStore.load() } }
             val local = localResult.getOrNull()
             _state.update { current ->
                 current.copy(
@@ -138,7 +145,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     progress = local?.progress.orEmpty(),
                 )
             }
-            val savedCredentials = credentialsResult.getOrNull()
             if (savedCredentials == null) {
                 _state.update {
                     it.copy(
@@ -207,6 +213,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             return
         }
+        val generation = ++connectionGeneration
 
         _state.update {
             it.copy(
@@ -222,11 +229,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val candidate = XtreamClient(normalizedCredentials)
                 val profile = withTimeout(CONNECTION_TIMEOUT_MS) { candidate.authenticate() }
+                if (generation != connectionGeneration) return@launch
 
                 client = candidate
                 categoryCache.clear()
+                catalogRequestId += 1
                 movieDetailJobs.values.forEach { it.cancel() }
                 movieDetailJobs.clear()
+                epgUpdatedAt.clear()
+                withContext(Dispatchers.IO) {
+                    localStateStore.selectProvider(normalizedCredentials)
+                    mediaCacheStore.selectProvider(normalizedCredentials)
+                }
+                val providerState = withContext(Dispatchers.IO) { localStateStore.load() }
                 if (persist) {
                     withContext(Dispatchers.IO) { credentialsStore.save(normalizedCredentials) }
                 }
@@ -242,14 +257,32 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         selectedCategories = emptyMap(),
                         items = emptyList(),
                         loadedItems = emptyMap(),
+                        richItems = emptyMap(),
+                        epg = emptyMap(),
+                        epgLoading = emptySet(),
+                        favorites = providerState.favorites,
+                        favoriteGroups = providerState.favoriteGroups,
+                        favoriteGroupOrder = providerState.favoriteGroupOrder,
+                        favoriteItemOrders = providerState.favoriteItemOrders,
+                        favoriteGroupAppearances = providerState.favoriteGroupAppearances,
+                        hiddenFavoriteGroupIds = providerState.hiddenFavoriteGroupIds,
+                        selectedFavoriteGroupId = firstVisibleFavoriteGroupId(
+                            providerState.favoriteGroupOrder,
+                            providerState.hiddenFavoriteGroupIds,
+                        ),
+                        recent = providerState.recent,
+                        progress = providerState.progress,
+                        settings = providerState.settings,
                         searchQuery = "",
                     )
                 }
                 loadCategories(candidate)
             } catch (error: CancellationException) {
+                if (generation != connectionGeneration) return@launch
                 if (error !is TimeoutCancellationException) throw error
                 connectionFailed(error, failureScreen, startup)
             } catch (error: Throwable) {
+                if (generation != connectionGeneration) return@launch
                 connectionFailed(error, failureScreen, startup)
             }
         }
@@ -393,6 +426,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runCatching { api.items(type, category.id) }
                 .onSuccess { items ->
+                    if (client !== api) return@onSuccess
                     cacheCategory(type, category.id, items)
                     if (requestId == catalogRequestId && _state.value.screen == AppScreen.Catalog(type)) {
                         _state.update {
@@ -410,6 +444,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     updateLoadedItems(type, items)
                 }
                 .onFailure { error ->
+                    if (client !== api) return@onFailure
                     if (requestId == catalogRequestId) {
                         _state.update { it.copy(loading = false, error = error.userMessage()) }
                     }
@@ -446,16 +481,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val api = client ?: return
         viewModelScope.launch {
             val cached = withContext(Dispatchers.IO) { mediaCacheStore.getSeries(series.id) }
+            if (client !== api) return@launch
             if (cached != null) {
                 applySeriesDetail(series.id, cached.series, cached.episodes)
                 return@launch
             }
             runCatching { api.seriesDetail(series) }
                 .onSuccess { (richSeries, episodes) ->
+                    if (client !== api) return@onSuccess
                     withContext(Dispatchers.IO) { mediaCacheStore.putSeries(richSeries, episodes) }
                     applySeriesDetail(series.id, richSeries, episodes)
                 }
                 .onFailure { error ->
+                    if (client !== api) return@onFailure
                     _state.update { it.copy(loading = false, error = error.userMessage()) }
                 }
         }
@@ -492,6 +530,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (delayMs > 0L) delay(delayMs)
                 val api = client ?: return@launch
                 runCatching { api.movieInfo(item) }.onSuccess { rich ->
+                    if (client !== api) return@onSuccess
                     withContext(Dispatchers.IO) { mediaCacheStore.putMovie(rich) }
                     _state.update { state -> state.copy(richItems = state.richItems + (key to rich)) }
                 }
@@ -516,13 +555,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun ensureEpg(channels: List<CatalogItem>) {
         val api = client ?: return
+        val now = System.currentTimeMillis()
         channels.filter { it.type == ContentType.LIVE }.take(8).forEach { channel ->
             val id = channel.id
             val state = _state.value
-            if (state.epg.containsKey(id) || id in state.epgLoading) return@forEach
+            val ttl = if (state.epg[id].isNullOrEmpty()) EPG_RETRY_MS else EPG_TTL_MS
+            val fresh = now - (epgUpdatedAt[id] ?: 0L) < ttl
+            if (fresh || id in state.epgLoading) return@forEach
             _state.update { it.copy(epgLoading = it.epgLoading + id) }
             viewModelScope.launch {
                 val programs = runCatching { api.shortEpg(id, 12) }.getOrDefault(emptyList())
+                if (client !== api) return@launch
+                epgUpdatedAt[id] = System.currentTimeMillis()
                 _state.update { current ->
                     current.copy(
                         epg = current.epg + (id to programs),
@@ -706,7 +750,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 error = null,
             )
         }
-        viewModelScope.launch(Dispatchers.IO) { localStateStore.saveFavoriteGroupAppearances(appearances) }
+        persist { localStateStore.saveFavoriteGroupAppearances(appearances) }
     }
 
     fun toggleFavoriteGroupHidden(groupId: String) {
@@ -724,7 +768,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 error = null,
             )
         }
-        viewModelScope.launch(Dispatchers.IO) { localStateStore.saveHiddenFavoriteGroupIds(hidden) }
+        persist { localStateStore.saveHiddenFavoriteGroupIds(hidden) }
     }
 
     fun saveFavoriteGroup(
@@ -798,13 +842,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
         persistGroups(groups, groupOrder, itemOrders)
-        viewModelScope.launch(Dispatchers.IO) { localStateStore.saveHiddenFavoriteGroupIds(hidden) }
+        persist { localStateStore.saveHiddenFavoriteGroupIds(hidden) }
     }
 
     fun saveFavoriteGroupOrder(order: List<String>) {
         val normalized = normalizeGroupOrder(order, _state.value.favoriteGroups)
         _state.update { it.copy(favoriteGroupOrder = normalized, error = null) }
-        viewModelScope.launch(Dispatchers.IO) { localStateStore.saveFavoriteGroupOrder(normalized) }
+        persist { localStateStore.saveFavoriteGroupOrder(normalized) }
     }
 
     fun saveFavoriteItemOrder(groupId: String, order: List<String>) {
@@ -813,27 +857,29 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val normalized = order.filter { it in validFavoriteKeys }.distinct().take(250)
         val orders = _state.value.favoriteItemOrders + (groupId to normalized)
         _state.update { it.copy(favoriteItemOrders = orders, error = null) }
-        viewModelScope.launch(Dispatchers.IO) { localStateStore.saveFavoriteItemOrders(orders) }
+        persist { localStateStore.saveFavoriteItemOrders(orders) }
     }
 
     fun updateSettings(settings: AppSettings) {
         val normalized = settings.copy(maxCachedCategories = settings.maxCachedCategories.coerceIn(2, 5))
         _state.update { it.copy(settings = normalized, error = null) }
         trimCategoryCache(normalized.maxCachedCategories)
-        viewModelScope.launch(Dispatchers.IO) { localStateStore.saveSettings(normalized) }
+        persist { localStateStore.saveSettings(normalized) }
     }
 
     fun clearCatalogCache() {
+        catalogRequestId += 1
         categoryCache.clear()
         movieDetailJobs.values.forEach { it.cancel() }
         movieDetailJobs.clear()
         mediaCacheStore.clear()
+        epgUpdatedAt.clear()
         _state.update { it.copy(items = emptyList(), loadedItems = emptyMap(), richItems = emptyMap(), epg = emptyMap(), error = null) }
     }
 
     fun clearHistory() {
         _state.update { it.copy(recent = emptyList(), progress = emptyMap(), error = null) }
-        viewModelScope.launch(Dispatchers.IO) { localStateStore.clearHistory() }
+        persist { localStateStore.clearHistory() }
     }
 
     fun savePlaybackProgress(item: CatalogItem, positionMs: Long, durationMs: Long) {
@@ -846,21 +892,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             next[key] = PlaybackProgress(positionMs, durationMs.coerceAtLeast(0L))
         }
         _state.update { it.copy(progress = next) }
-        viewModelScope.launch(Dispatchers.IO) { localStateStore.saveProgress(next) }
+        persist { localStateStore.saveProgress(next) }
     }
 
     fun clearPlaybackProgress(item: CatalogItem) {
         val next = _state.value.progress - itemKey(item)
         _state.update { it.copy(progress = next) }
-        viewModelScope.launch(Dispatchers.IO) { localStateStore.saveProgress(next) }
+        persist { localStateStore.saveProgress(next) }
     }
 
     fun disconnect() {
+        connectionGeneration += 1
+        catalogRequestId += 1
         client = null
         categoryCache.clear()
         movieDetailJobs.values.forEach { it.cancel() }
         movieDetailJobs.clear()
         lastFocusByArea.clear()
+        epgUpdatedAt.clear()
         _state.update {
             it.copy(
                 screen = AppScreen.Login,
@@ -923,7 +972,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun addRecent(item: CatalogItem) {
         val next = (listOf(item) + _state.value.recent.filterNot { itemKey(it) == itemKey(item) }).take(40)
         _state.update { it.copy(recent = next) }
-        viewModelScope.launch(Dispatchers.IO) { localStateStore.saveRecent(next) }
+        persist { localStateStore.saveRecent(next) }
     }
 
     private fun persistFavorites(
@@ -931,7 +980,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         groups: List<FavoriteGroup>,
         itemOrders: Map<String, List<String>>,
     ) {
-        viewModelScope.launch(Dispatchers.IO) {
+        persist {
             localStateStore.saveFavorites(favorites)
             localStateStore.saveFavoriteGroups(groups)
             localStateStore.saveFavoriteItemOrders(itemOrders)
@@ -943,7 +992,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         groupOrder: List<String>,
         itemOrders: Map<String, List<String>>,
     ) {
-        viewModelScope.launch(Dispatchers.IO) {
+        persist {
             localStateStore.saveFavoriteGroups(groups)
             localStateStore.saveFavoriteGroupOrder(groupOrder)
             localStateStore.saveFavoriteItemOrders(itemOrders)
@@ -957,14 +1006,43 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun updateLoadedItems(type: ContentType, items: List<CatalogItem>) {
+        val freshById = items.associateBy { it.id }
+        fun refreshed(item: CatalogItem): CatalogItem {
+            val fresh = freshById[item.id] ?: return item
+            if (item.type != type) return item
+            return item.copy(
+                imageUrl = fresh.imageUrl ?: item.imageUrl,
+                coverUrl = fresh.coverUrl ?: item.coverUrl,
+                backdropUrl = fresh.backdropUrl ?: item.backdropUrl,
+            )
+        }
+        val before = _state.value
+        val favorites = before.favorites.map(::refreshed)
+        val recent = before.recent.map(::refreshed)
         _state.update { state ->
-            state.copy(loadedItems = state.loadedItems + (type to items.take(60)))
+            state.copy(
+                loadedItems = state.loadedItems + (type to items.take(60)),
+                favorites = state.favorites.map(::refreshed),
+                recent = state.recent.map(::refreshed),
+            )
+        }
+        if (favorites != before.favorites || recent != before.recent) {
+            persist {
+                localStateStore.saveFavorites(favorites)
+                localStateStore.saveRecent(recent)
+            }
         }
     }
 
     private fun cacheCategory(type: ContentType, categoryId: String, items: List<CatalogItem>) {
         categoryCache[cacheKey(type, categoryId)] = items
         trimCategoryCache(_state.value.settings.maxCachedCategories)
+    }
+
+    private fun persist(block: () -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            persistenceMutex.withLock { block() }
+        }
     }
 
     private fun trimCategoryCache(maxPerType: Int) {
@@ -981,6 +1059,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private companion object {
         const val CONNECTION_TIMEOUT_MS = 30_000L
+        const val EPG_TTL_MS = 5 * 60_000L
+        const val EPG_RETRY_MS = 30_000L
     }
 }
 

@@ -11,8 +11,9 @@ Depending on platform and enabled features, the app may store:
 - Favorites
 - Recently watched content
 - Movie and episode resume positions
+- Bounded movie and series metadata used to speed up detail screens
 
-webOS stores app state in local application storage. Android TV stores provider credentials using Android encrypted preferences in the developer preview.
+webOS stores app state in local application storage. Android TV stores provider credentials using Android encrypted preferences in the developer preview. Favorites, history, resume positions, and cached metadata are partitioned by provider account.
 
 ## Data transmitted
 

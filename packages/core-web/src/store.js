@@ -7,6 +7,8 @@
   var KEY = 'xtreamlytv.state.v1';
   var defaults = {
     credentials: null,
+    activeAccount: '',
+    accounts: {},
     settings: {
       apiProxy: '',
       streamFormat: 'auto',
@@ -112,6 +114,8 @@
       var groups = migrateFavoriteGroups(parsed.favoriteGroups);
       return {
         credentials: parsed.credentials || null,
+        activeAccount: parsed.activeAccount || Core.providerKey(parsed.credentials),
+        accounts: parsed.accounts && typeof parsed.accounts === 'object' ? parsed.accounts : {},
         settings: Object.assign({}, defaults.settings, parsed.settings || {}),
         favorites: migrateItems(parsed.favorites),
         favoriteGroups: groups,
@@ -124,12 +128,34 @@
   }
 
   var state = load();
+  var accountFields = ['favorites', 'favoriteGroups', 'favoriteGroupOrder', 'favoriteItemOrders', 'recent', 'progress'];
+  var accountSettings = ['hiddenCatalogCategories', 'hiddenFavoriteGroupIds', 'favoriteSystemGroupOverrides'];
+  function accountSnapshot() {
+    var value = {};
+    accountFields.forEach(function (key) { value[key] = clone(state[key]); });
+    value.settings = {};
+    accountSettings.forEach(function (key) { if (state.settings[key] !== undefined) value.settings[key] = clone(state.settings[key]); });
+    return value;
+  }
+  function selectAccount(key) {
+    if (state.activeAccount === key) return;
+    if (state.activeAccount) state.accounts[state.activeAccount] = accountSnapshot();
+    var saved = state.accounts[key] || defaults;
+    accountFields.forEach(function (field) { state[field] = clone(saved[field] || defaults[field]); });
+    accountSettings.forEach(function (field) { delete state.settings[field]; if (saved.settings && saved.settings[field] !== undefined) state.settings[field] = clone(saved.settings[field]); });
+    state.activeAccount = key;
+  }
   function progressKey(type, id) { return String(type || 'movie') + ':' + String(id || ''); }
 
   window.XtreamlyTVStore = window.TVeeStore = {
     getState: function () { return clone(state); },
-    saveCredentials: function (credentials) { state.credentials = credentials; this.persist(); },
-    clearCredentials: function () { state.credentials = null; this.persist(); },
+    saveCredentials: function (credentials) { selectAccount(Core.providerKey(credentials)); state.credentials = credentials; this.persist(); },
+    selectDemo: function () { selectAccount('demo'); this.persist(); },
+    clearCredentials: function () {
+      if (state.activeAccount) state.accounts[state.activeAccount] = accountSnapshot();
+      state.credentials = null;
+      this.persist();
+    },
     updateSettings: function (settings) { state.settings = Object.assign({}, state.settings, settings); this.persist(); },
     isFavorite: function (type, id) {
       if (arguments.length === 1) { id = type; type = 'live'; }
@@ -232,7 +258,31 @@
     },
     clearProgress: function (type, id) { delete state.progress[progressKey(type, id)]; this.persist(); },
     clearHistory: function () { state.recent = []; state.progress = {}; this.persist(); },
-    persist: function () { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (error) { /* unavailable */ } },
+    refreshArtwork: function (items, type) {
+      var byId = {};
+      (items || []).forEach(function (item) { byId[Core.itemId(item, type)] = item; });
+      var changed = false;
+      [state.favorites, state.recent].forEach(function (list) {
+        list.forEach(function (item) {
+          if (Core.inferType(item) !== type) return;
+          var fresh = byId[Core.itemId(item, type)];
+          if (!fresh) return;
+          ['stream_icon', 'cover', 'cover_big', 'movie_image'].forEach(function (key) {
+            if (fresh[key] && item[key] !== fresh[key]) { item[key] = fresh[key]; changed = true; }
+          });
+        });
+      });
+      if (changed) this.persist();
+    },
+    persist: function () {
+      var keys = Object.keys(state.progress).sort(function (a, b) { return Number(state.progress[b].updated_at || 0) - Number(state.progress[a].updated_at || 0); });
+      keys.slice(500).forEach(function (key) { delete state.progress[key]; });
+      try { localStorage.setItem(KEY, JSON.stringify(state)); return true; }
+      catch (error) {
+        if (window.dispatchEvent && typeof CustomEvent !== 'undefined') window.dispatchEvent(new CustomEvent('xtreamlytv-storage-error'));
+        return false;
+      }
+    },
     reset: function () { state = clone(defaults); this.persist(); },
     inferType: Core.inferType,
     itemId: Core.itemId

@@ -4,25 +4,45 @@
   var Core = window.XtreamlyCore;
   if (!Core) throw new Error('XtreamlyCore must load before api.js');
 
-  function withTimeout(url, options, timeoutMs) {
-    timeoutMs = timeoutMs || 25000;
-    if (typeof AbortController === 'undefined') return fetch(url, options);
-    var controller = new AbortController();
-    var timer = setTimeout(function () { controller.abort(); }, timeoutMs);
-    options = Object.assign({}, options, { signal: controller.signal });
-    return fetch(url, options).then(function (response) {
-      clearTimeout(timer);
-      return response;
-    }, function (error) {
-      clearTimeout(timer);
+  function readResponse(response) {
+    if (!response.ok) {
+      var error = new Error('Provider returned HTTP ' + response.status + '.');
+      error.status = response.status;
       throw error;
+    }
+    return response.json().catch(function (error) {
+      if (error.name === 'AbortError') throw error;
+      throw new Error('Provider returned an invalid response.');
+    }).then(function (data) {
+      if (data && !Array.isArray(data) && (data.error || (data.user_info && String(data.user_info.auth) === '0'))) {
+        throw new Error('Provider rejected the request. Check your connection and account.');
+      }
+      return data;
     });
+  }
+
+  function withTimeout(url, options, timeoutMs) {
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    if (controller) options = Object.assign({}, options, { signal: controller.signal });
+    var timer;
+    var deadline = new Promise(function (_, reject) {
+      timer = setTimeout(function () {
+        var error = new Error('The provider took too long to respond.');
+        error.name = 'AbortError';
+        reject(error);
+        if (controller) controller.abort();
+      }, timeoutMs || 25000);
+    });
+    return Promise.race([fetch(url, options).then(readResponse), deadline]).then(function (data) {
+      clearTimeout(timer); return data;
+    }, function (error) { clearTimeout(timer); throw error; });
   }
 
   function XtreamApi(credentials, settings) {
     this.server = Core.trimSlash(credentials.server);
     this.username = String(credentials.username || '').trim();
     this.password = String(credentials.password || '');
+    this.proxyToken = String(settings && settings.apiProxyToken || '');
     this.proxy = Core.trimSlash(settings && settings.apiProxy);
     this.streamFormat = (settings && settings.streamFormat) || 'auto';
   }
@@ -33,16 +53,18 @@
     if (action) params.action = action;
 
     if (this.proxy) {
+      var headers = { 'Content-Type': 'application/json' };
+      if (this.proxyToken) headers.Authorization = 'Bearer ' + this.proxyToken;
       return withTimeout(this.proxy + '/api/xtream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify({
           server: this.server,
           username: this.username,
           password: this.password,
           params: params
         })
-      }, requestOptions.timeout || 45000).then(this.handleResponse.bind(this));
+      }, requestOptions.timeout || 45000);
     }
 
     var query = new URLSearchParams();
@@ -52,7 +74,6 @@
       if (params[key] !== undefined && params[key] !== null) query.set(key, params[key]);
     });
     return withTimeout(this.server + '/player_api.php?' + query.toString(), { method: 'GET' }, requestOptions.timeout || 45000)
-      .then(this.handleResponse.bind(this))
       .catch(function (error) {
         if (error && error.name === 'AbortError') error.message = 'The provider took too long to respond.';
         else if (String(error && error.message).toLowerCase().indexOf('fetch') >= 0) {
@@ -62,10 +83,7 @@
       });
   };
 
-  XtreamApi.prototype.handleResponse = function (response) {
-    if (!response.ok) throw new Error('Provider returned HTTP ' + response.status + '.');
-    return response.json().catch(function () { throw new Error('Provider returned an invalid response.'); });
-  };
+  XtreamApi.prototype.handleResponse = readResponse;
 
   XtreamApi.prototype.authenticate = function () {
     return this.request(null, null, { timeout: 25000 }).then(function (data) {
@@ -119,15 +137,10 @@
   XtreamApi.prototype.getSeries = function (categoryId) {
     var self = this;
     var extras = categoryId && categoryId !== 'all' ? { category_id: categoryId } : {};
-    var actions = ['get_series', 'get_series_streams'];
-    function tryAction(index) {
-      if (index >= actions.length) return Promise.resolve([]);
-      return self.request(actions[index], extras, { timeout: categoryId === 'all' ? 90000 : 60000 }).then(function (data) {
-        var items = Core.normalizeCollection(data, ['series']);
-        return items.length ? items : tryAction(index + 1);
-      }).catch(function () { return tryAction(index + 1); });
-    }
-    return tryAction(0);
+    return self.request('get_series', extras, { timeout: 60000 }).catch(function (error) {
+      if ([400, 404, 405, 501].indexOf(error.status) < 0) throw error;
+      return self.request('get_series_streams', extras, { timeout: 60000 });
+    }).then(function (data) { return Core.normalizeCollection(data, ['series']); });
   };
 
   XtreamApi.prototype.discoverSeries = function (knownCategories) {

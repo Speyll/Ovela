@@ -95,7 +95,7 @@
     className = className || 'channel-logo';
     var image = imageOf(item, 'live');
     if (image) {
-      return '<img class="' + className + '" src="' + escapeHtml(image) + '" alt="" loading="lazy" decoding="async" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'grid\'">' +
+      return '<img data-channel-art="true" class="' + className + '" src="' + escapeHtml(image) + '" alt="" loading="lazy" decoding="async" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'grid\'">' +
         '<div class="channel-logo-fallback" style="display:none">' + escapeHtml(initials(titleOf(item))) + '</div>';
     }
     return '<div class="channel-logo-fallback">' + escapeHtml(initials(titleOf(item))) + '</div>';
@@ -222,6 +222,7 @@
       this.applyTheme(this.state.settings.theme || 'blue');
       this.navigationStates = this.loadNavigationStates();
       this.scale();
+      window.addEventListener('xtreamlytv-storage-error', function () { App.toast('Unable to save changes. Free device storage and try again.'); });
       window.addEventListener('resize', this.scale.bind(this));
       document.addEventListener('keydown', this.onGlobalKey.bind(this));
       document.addEventListener('focusin', this.updateMenuHint.bind(this));
@@ -477,7 +478,9 @@
       this.connect(this.state.credentials, this.state.settings, true);
     },
 
-    resetCatalog: function () {
+    resetCatalog: function (clearPersistent) {
+      this.sessionGeneration = (this.sessionGeneration || 0) + 1;
+      if (this.resetMetadata) this.resetMetadata(!!clearPersistent);
       this.destroyVirtualGrid();
       this.catalogCache = { live: {}, movies: {}, series: {} };
       this.cacheOrder = { live: [], movies: [], series: [] };
@@ -506,19 +509,23 @@
       XtreamlyTVStore.updateSettings(settings || {});
       this.state = XtreamlyTVStore.getState();
       this.applyTheme(this.state.settings.theme || 'blue');
-      this.api = new XtreamlyTVApi(credentials, this.state.settings);
+      this.resetCatalog();
+      var session = this.sessionGeneration;
+      var candidate = new XtreamlyTVApi(credentials, this.state.settings);
       this.renderLoading('Connecting and loading category indexes…');
-      this.api.authenticate().then(function (profile) {
+      candidate.authenticate().then(function (profile) {
+        if (session !== self.sessionGeneration) return null;
+        self.api = candidate;
         self.profile = profile;
         XtreamlyTVStore.saveCredentials(credentials);
         self.state = XtreamlyTVStore.getState();
         return Promise.all([
-          settle(self.api.getLiveCategories(), []),
-          settle(self.api.getVodCategories(), []),
-          settle(self.api.getSeriesCategories(), [])
+          settle(candidate.getLiveCategories(), []),
+          settle(candidate.getVodCategories(), []),
+          settle(candidate.getSeriesCategories(), [])
         ]);
       }).then(function (results) {
-        self.resetCatalog();
+        if (!results || session !== self.sessionGeneration) return;
         self.liveCategories = results[0];
         self.vodCategories = results[1];
         self.seriesCategories = results[2];
@@ -531,6 +538,7 @@
           setTimeout(function () { self.ensureSeriesDiscovery(true); }, 250);
         }
       }).catch(function (error) {
+        if (session !== self.sessionGeneration) return;
         /* A provider outage or authentication failure must never erase the
            user's saved connection details. For manual attempts, re-render the
            submitted values without persisting them until authentication succeeds. */
@@ -546,6 +554,8 @@
     startDemo: function () {
       var self = this;
       this.resetCatalog();
+      XtreamlyTVStore.selectDemo();
+      this.state = XtreamlyTVStore.getState();
       this.demo = true;
       this.profile = XtreamlyTVMock.profile;
       this.liveCategories = XtreamlyTVMock.liveCategories.slice();
@@ -616,7 +626,8 @@
     storeCache: function (kind, category, items) {
       category = String(category || 'all');
       this.catalogCache[kind][category] = items;
-      this.indexItems(kind, items);
+      XtreamlyTVStore.refreshArtwork(items, kind === 'movies' ? 'movie' : kind === 'series' ? 'series' : 'live');
+      this.state = XtreamlyTVStore.getState();
       this.cacheOrder[kind] = this.cacheOrder[kind].filter(function (key) { return key !== category; });
       this.cacheOrder[kind].push(category);
       var limit = Math.max(1, Number(this.state.settings.maxCachedCategories || 3));
@@ -625,6 +636,10 @@
         if (evict === category) continue;
         delete this.catalogCache[kind][evict];
       }
+      this.itemLookup = {};
+      ['live', 'movies', 'series'].forEach(function (library) {
+        Object.keys(App.catalogCache[library]).forEach(function (id) { App.indexItems(library, App.catalogCache[library][id]); });
+      });
     },
 
     loadedItems: function (kind) {
@@ -649,8 +664,10 @@
       var self = this;
       if (this.seriesCategories.length || this.seriesDiscovery === 'done') return Promise.resolve(this.seriesCategories);
       if (this.seriesDiscoveryPromise) return this.seriesDiscoveryPromise;
+      var session = this.sessionGeneration;
       this.seriesDiscovery = 'loading';
       this.seriesDiscoveryPromise = this.api.discoverSeries(this.seriesCategories).then(function (result) {
+        if (session !== self.sessionGeneration) return [];
         self.seriesCategories = result.categories || [];
         if (result.items && result.items.length) {
           var normalized = self.normalizeCatalogItems('series', result.items);
@@ -662,7 +679,8 @@
         if (self.currentView === 'series' && !self.detail) self.renderCatalog('series');
         return self.seriesCategories;
       }).catch(function (error) {
-        self.seriesDiscovery = 'done';
+        if (session !== self.sessionGeneration) return [];
+        self.seriesDiscovery = 'idle';
         self.seriesDiscoveryPromise = null;
         self.catalogErrors.series = error.message || 'Unable to discover series.';
         if (self.currentView === 'series') self.renderCatalog('series');
@@ -675,16 +693,7 @@
       var self = this;
       if (kind === 'live') return this.api.getLiveStreams(category);
       if (kind === 'movies') return this.api.getVodStreams(category);
-      return this.api.getSeries(category).then(function (items) {
-        if (items.length || category === 'all') return items;
-        var cachedAll = self.catalogCache.series.all;
-        if (cachedAll) return self.filterByCategory(cachedAll, category);
-        return self.api.getSeries('all').then(function (allItems) {
-          var normalizedAll = self.normalizeCatalogItems('series', allItems);
-          self.storeCache('series', 'all', normalizedAll);
-          return self.filterByCategory(allItems, category);
-        });
-      });
+      return this.api.getSeries(category);
     },
 
     loadCategory: function (kind, category, options) {
@@ -698,10 +707,12 @@
       }
       if (this.catalogPromises[kind][category]) return this.catalogPromises[kind][category];
 
+      var session = this.sessionGeneration;
       var generation = ++this.requestGeneration[kind];
       this.catalogErrors[kind] = '';
       if (options.render !== false) this.showCatalogLoading(kind, category === 'all' ? 'Loading the full provider catalog…' : 'Loading category…');
       this.catalogPromises[kind][category] = this.fetchCatalog(kind, category).then(function (rawItems) {
+        if (session !== self.sessionGeneration) return [];
         var items = self.normalizeCatalogItems(kind, rawItems);
         if (category !== 'all') {
           var matches = self.filterByCategory(items, category);
@@ -715,6 +726,7 @@
         }
         return items;
       }).catch(function (error) {
+        if (session !== self.sessionGeneration) return [];
         delete self.catalogPromises[kind][category];
         self.catalogErrors[kind] = error.message || 'Unable to load this category.';
         if (options.render !== false && self.currentView === kind) self.showCatalogError(kind, self.catalogErrors[kind]);
@@ -1199,12 +1211,16 @@
       this.rememberNavigationState(returnState);
       this.detail = { type: 'movie', item: movie, info: null, loading: true, error: '', returnView:returnView, returnState:returnState };
       this.renderShell(returnView);
+      var pendingDetail = this.detail;
+      var session = this.sessionGeneration;
       this.api.getVodInfo(movie.stream_id).then(function (response) {
+        if (session !== self.sessionGeneration || self.detail !== pendingDetail) return;
         if (!self.detail || self.detail.type !== 'movie' || String(self.detail.item.stream_id) !== String(movie.stream_id)) return;
         self.detail.info = normalizeMovie(movie, response);
         self.detail.loading = false;
         self.renderView();
       }).catch(function (error) {
+        if (session !== self.sessionGeneration || self.detail !== pendingDetail) return;
         if (!self.detail) return;
         self.detail.info = normalizeMovie(movie, {});
         self.detail.loading = false;
@@ -1244,7 +1260,10 @@
       this.rememberNavigationState(returnState);
       this.detail = { type: 'series', item: series, info: null, loading: true, error: '', season: null, returnView:returnView, returnState:returnState };
       this.renderShell(returnView);
+      var pendingDetail = this.detail;
+      var session = this.sessionGeneration;
       this.api.getSeriesInfo(series.series_id).then(function (response) {
+        if (session !== self.sessionGeneration || self.detail !== pendingDetail) return;
         if (!self.detail || self.detail.type !== 'series' || String(self.detail.item.series_id) !== String(series.series_id)) return;
         self.detail.info = response || {};
         self.detail.loading = false;
@@ -1252,6 +1271,7 @@
         self.detail.season = seasons.length ? seasons[0] : null;
         self.renderView();
       }).catch(function (error) {
+        if (session !== self.sessionGeneration || self.detail !== pendingDetail) return;
         if (!self.detail) return;
         self.detail.loading = false;
         self.detail.info = { info: series, episodes: {} };
@@ -1976,7 +1996,7 @@
         '<section class="settings-card theme-card-wide"><h3>Appearance</h3><p>Choose a skin. The layout stays identical while the background, panels, focus ring, and highlights change hue.</p><div class="theme-picker">' + themes.map(function (theme) { return '<button class="theme-choice focusable ' + (settings.theme === theme.id ? 'active' : '') + '" data-theme-choice="' + theme.id + '"><i class="theme-preview theme-' + theme.id + '"></i><span>' + theme.label + '</span><b>' + (settings.theme === theme.id ? '✓' : '') + '</b></button>'; }).join('') + '</div></section>' +
         '<section class="settings-card"><h3>Playback compatibility</h3><p>Automatic mode tries HLS and MPEG-TS. If audio starts without video, XtreamlyTV retries the alternate container.</p><label class="field"><span>Preferred live format</span><select id="formatSetting" class="focusable"><option value="auto"' + (settings.streamFormat === 'auto' || !settings.streamFormat ? ' selected' : '') + '>Automatic fallback</option><option value="m3u8"' + (settings.streamFormat === 'm3u8' ? ' selected' : '') + '>HLS first</option><option value="ts"' + (settings.streamFormat === 'ts' ? ' selected' : '') + '>MPEG-TS first</option></select></label><button id="savePlayback" class="primary-button focusable">Save playback</button></section>' +
         '<section class="settings-card"><h3>Performance</h3><p>Only visible cards are added to the DOM. Category data is cached temporarily to make back-and-forth browsing quick without consuming excessive TV memory.</p><label class="field"><span>Cached categories per library</span><select id="cacheSetting" class="focusable"><option value="2"' + (Number(settings.maxCachedCategories || 3) === 2 ? ' selected' : '') + '>2 — lowest memory</option><option value="3"' + (Number(settings.maxCachedCategories || 3) === 3 ? ' selected' : '') + '>3 — balanced</option><option value="5"' + (Number(settings.maxCachedCategories || 3) === 5 ? ' selected' : '') + '>5 — faster revisits</option></select></label><button id="savePerformance" class="primary-button focusable">Save performance</button><button id="clearCatalogCache" class="secondary-button focusable settings-secondary">Clear catalog cache</button></section>' +
-        '<section class="settings-card"><h3>API bridge</h3><p>Optional local bridge for Xtream servers that do not permit CORS requests from a TV web app.</p><label class="field"><span>Bridge URL</span><input id="proxySetting" class="focusable" value="' + escapeHtml(settings.apiProxy || '') + '" placeholder="http://unraid.local:8787"></label><button id="saveProxy" class="primary-button focusable">Save bridge</button></section>' +
+        '<section class="settings-card"><h3>API bridge</h3><p>Optional authenticated local bridge for Xtream servers that do not permit CORS requests from a TV web app.</p><label class="field"><span>Bridge URL</span><input id="proxySetting" class="focusable" value="' + escapeHtml(settings.apiProxy || '') + '" placeholder="http://unraid.local:8787"></label><label class="field"><span>Bridge token</span><input id="proxyTokenSetting" class="focusable" type="password" value="' + escapeHtml(settings.apiProxyToken || '') + '" autocomplete="off"></label><button id="saveProxy" class="primary-button focusable">Save bridge</button></section>' +
         '<section class="settings-card"><h3>Catalog diagnostics</h3><p>Loaded in memory: ' + this.loadedCount('live').toLocaleString() + ' channels, ' + this.loadedCount('movies').toLocaleString() + ' movies, and ' + this.loadedCount('series').toLocaleString() + ' series. Provider catalogs remain category-scoped so the full library is never loaded into TV memory at once.</p><div class="diagnostic-pill">Virtual rendering active</div><div class="diagnostic-pill">Series discovery: ' + escapeHtml(this.seriesDiscovery) + '</div></section>' +
         '<section class="settings-card"><h3>About XtreamlyTV</h3><div class="about-list"><div><span>Version</span><strong>' + APP_VERSION + '</strong></div><div><span>Application ID</span><strong>' + APP_ID + '</strong></div><div><span>Platform</span><strong>LG webOS TV</strong></div><div><span>License</span><strong>MIT open source</strong></div><div><span>Content</span><strong>No channels or subscriptions included</strong></div></div></section>' +
         '<section class="settings-card"><h3>Privacy & history</h3><p>XtreamlyTV has no analytics, advertising, or tracking. Provider credentials, favorites, recent items, and resume positions are stored locally on the TV.</p><button id="clearHistory" class="secondary-button focusable">Clear watch history</button></section>' +
@@ -2010,9 +2030,9 @@
       });
       document.getElementById('savePlayback').addEventListener('click', function () { XtreamlyTVStore.updateSettings({ streamFormat: document.getElementById('formatSetting').value }); self.refreshStateAndApi(); self.toast('Playback setting saved'); });
       document.getElementById('savePerformance').addEventListener('click', function () { XtreamlyTVStore.updateSettings({ maxCachedCategories: Number(document.getElementById('cacheSetting').value) }); self.state = XtreamlyTVStore.getState(); self.toast('Performance setting saved'); });
-      document.getElementById('clearCatalogCache').addEventListener('click', function () { self.resetCatalog(); self.activeCategory.live = self.firstCategoryId('live'); self.activeCategory.movies = self.firstCategoryId('movies'); self.activeCategory.series = self.firstCategoryId('series'); self.toast('Catalog cache cleared'); self.renderSettings(); });
-      document.getElementById('saveProxy').addEventListener('click', function () { XtreamlyTVStore.updateSettings({ apiProxy: document.getElementById('proxySetting').value.trim().replace(/\/+$/, '') }); self.refreshStateAndApi(); self.toast('API bridge saved'); });
-      document.getElementById('signOut').addEventListener('click', function () { self.demo = false; self.detail = null; XtreamlyTVStore.clearCredentials(); self.state = XtreamlyTVStore.getState(); self.renderLogin(); });
+      document.getElementById('clearCatalogCache').addEventListener('click', function () { self.resetCatalog(true); self.activeCategory.live = self.firstCategoryId('live'); self.activeCategory.movies = self.firstCategoryId('movies'); self.activeCategory.series = self.firstCategoryId('series'); self.toast('Catalog cache cleared'); self.renderSettings(); });
+      document.getElementById('saveProxy').addEventListener('click', function () { XtreamlyTVStore.updateSettings({ apiProxy: document.getElementById('proxySetting').value.trim().replace(/\/+$/, ''), apiProxyToken: document.getElementById('proxyTokenSetting').value }); self.refreshStateAndApi(); self.toast('API bridge saved'); });
+      document.getElementById('signOut').addEventListener('click', function () { self.demo = false; self.detail = null; self.resetCatalog(); self.api = null; self.profile = null; XtreamlyTVStore.clearCredentials(); self.state = XtreamlyTVStore.getState(); self.renderLogin(); });
       document.getElementById('clearHistory').addEventListener('click', function () { XtreamlyTVStore.clearHistory(); self.state = XtreamlyTVStore.getState(); self.toast('Watch history and resume positions cleared'); });
       XtreamlyTVNavigation.focusFirst('#editProvider');
     },
@@ -2202,7 +2222,10 @@
 
     loadPlayerEpg: function (item) {
       if (this.playerType !== 'live' || !this.api || !this.api.getShortEpg) return;
+      var self = this, session = this.sessionGeneration;
+      var playerItem = this.playerMedia;
       this.api.getShortEpg(item.stream_id).then(function (epg) {
+        if (session !== self.sessionGeneration || self.playerMedia !== playerItem) return;
         var now = epg.find(function (entry) { var time = Date.now() / 1000; return Number(entry.start_timestamp) <= time && Number(entry.stop_timestamp) >= time; }) || epg[0];
         var program = document.getElementById('playerProgram');
         var description = document.getElementById('playerDescription');

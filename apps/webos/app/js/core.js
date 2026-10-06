@@ -87,6 +87,12 @@
   }
 
   return {
+    providerKey: function (credentials) {
+      if (!credentials) return '';
+      var server = trimSlash(credentials.server);
+      try { var url = new URL(server); url.hostname = url.hostname.toLowerCase(); server = trimSlash(url.toString()); } catch (_) {}
+      return JSON.stringify([server, String(credentials.username || '').trim()]);
+    },
     trimSlash: trimSlash,
     decodeMaybeBase64: decodeMaybeBase64,
     safeExtension: safeExtension,

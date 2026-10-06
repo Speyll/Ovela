@@ -7,3 +7,6 @@ services:
       - "8787:8787"
     environment:
       PORT: "8787"
+      BRIDGE_TOKEN: "replace-with-a-long-random-token"
+      ALLOWED_SERVERS: "https://your-provider.example"
+      ALLOWED_ORIGINS: "null,http://localhost"

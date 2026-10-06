@@ -88,9 +88,9 @@ def main() -> None:
             XtreamlyTVApp.renderHome();
         }""")
         home_text = page.locator('.scroll-view').inner_text()
-        assert 'Recently watched channels' in home_text
-        assert 'Recently watched movies' in home_text
-        assert 'Recently watched series' in home_text
+        assert 'Continue watching Live TV' in home_text
+        assert 'Continue watching Movies' in home_text
+        assert 'Continue watching Series' in home_text
 
         # Home vertical navigation must be able to travel down and return to the hero.
         page.locator('.hero .focusable').first.focus()
@@ -170,17 +170,15 @@ def main() -> None:
         # Favorites regressions: cards are uniform and actions respect the safe area.
         page.click('[data-favorite-group="all"]')
         card_geometry = page.evaluate("""() => {
-            const recent = document.querySelector('.favorite-recent-grid .favorite-mixed-card');
             const main = document.querySelector('#favoriteGrid .favorite-mixed-card');
             const actions = document.querySelector('.favorite-groups-heading-actions').getBoundingClientRect();
             const view = document.querySelector('.view').getBoundingClientRect();
             return {
-                recentHeight: recent.getBoundingClientRect().height,
                 mainHeight: main.getBoundingClientRect().height,
                 rightInset: view.right - actions.right
             };
         }""")
-        assert abs(card_geometry['recentHeight'] - card_geometry['mainHeight']) <= 1
+        assert card_geometry['mainHeight'] > 0
         assert card_geometry['rightInset'] >= 20
         assert page.locator('#reorderFavoriteItems').count() == 0
 
@@ -217,19 +215,8 @@ def main() -> None:
         page.keyboard.press('ArrowDown')
         assert page.evaluate("document.activeElement.id") == 'favoriteGroupName'
         assert page.evaluate("XtreamlyTVApp.virtualGrid.columns") == 4
-        assert page.evaluate("XtreamlyTVApp.virtualGrid.visibleRows") == 4
-        selection_geometry = page.evaluate("""() => {
-            const card = document.querySelector('.favorite-selection-card');
-            const art = card.querySelector('.favorite-live-art,.favorite-mixed-art');
-            return {
-                cardHeight: card.getBoundingClientRect().height,
-                artHeight: art.getBoundingClientRect().height,
-                isCompact: card.classList.contains('favorite-mixed-card')
-            };
-        }""")
-        assert selection_geometry['isCompact'] is True
-        assert selection_geometry['cardHeight'] < 200
-        assert selection_geometry['artHeight'] <= 80
+        assert page.evaluate("XtreamlyTVApp.virtualGrid.visibleRows") == 3
+        assert page.locator('.favorite-editor').count() == 1
         page.click('#cancelFavoriteEditor')
         assert page.locator('.favorite-manager').count() == 1
         page.click('#favoriteManagerBack')

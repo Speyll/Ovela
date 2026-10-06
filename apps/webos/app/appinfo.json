@@ -1,6 +1,7 @@
 {
   "id": "com.github.xtreamlytv.webos",
   "version": "0.7.0",
+  "requiredACG": [],
   "vendor": "XtreamlyTV Contributors",
   "type": "web",
   "main": "index.html",

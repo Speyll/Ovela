@@ -4,21 +4,31 @@ const http = require('http');
 const { URL } = require('url');
 
 const PORT = Number(process.env.PORT || 8787);
+const BRIDGE_TOKEN = String(process.env.BRIDGE_TOKEN || '');
+const ALLOWED_SERVERS = String(process.env.ALLOWED_SERVERS || '')
+  .split(',').map(value => value.trim()).filter(Boolean).map(value => validServer(value));
+const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGINS || '')
+  .split(',').map(value => value.trim()).filter(Boolean);
+const MAX_RESPONSE_BYTES = Number(process.env.MAX_RESPONSE_BYTES || 8 * 1024 * 1024);
 const ALLOWED_ACTIONS = new Set([
   '', 'get_live_categories', 'get_live_streams', 'get_short_epg',
   'get_vod_categories', 'get_vod_streams', 'get_vod_info',
-  'get_series_categories', 'get_series', 'get_series_info'
+  'get_series_categories', 'get_series', 'get_series_streams', 'get_series_info'
 ]);
 
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+function cors(req, res) {
+  const origin = String(req.headers.origin || '');
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Cache-Control', 'no-store');
 }
 
-function send(res, status, body) {
-  cors(res);
+function send(req, res, status, body) {
+  cors(req, res);
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(body));
@@ -48,18 +58,24 @@ function validServer(value) {
 }
 
 const server = http.createServer(async (req, res) => {
-  cors(res);
+  cors(req, res);
   if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
-  if (req.method === 'GET' && req.url === '/health') return send(res, 200, { ok: true, service: 'xtreamlytv-api-bridge' });
-  if (req.method !== 'POST' || req.url !== '/api/xtream') return send(res, 404, { error: 'Not found' });
+  if (req.method === 'GET' && req.url === '/health') return send(req, res, 200, { ok: true, service: 'xtreamlytv-api-bridge' });
+  if (req.method !== 'POST' || req.url !== '/api/xtream') return send(req, res, 404, { error: 'Not found' });
+  if (!BRIDGE_TOKEN || req.headers.authorization !== `Bearer ${BRIDGE_TOKEN}`) {
+    return send(req, res, 401, { error: 'Bridge authentication required' });
+  }
+  const origin = String(req.headers.origin || '');
+  if (origin && !ALLOWED_ORIGINS.includes(origin)) return send(req, res, 403, { error: 'Origin not allowed' });
 
   try {
     const body = await readJson(req);
     const base = validServer(body.server);
-    if (!base || !body.username || !body.password) return send(res, 400, { error: 'server, username, and password are required' });
+    if (!base || !body.username || !body.password) return send(req, res, 400, { error: 'server, username, and password are required' });
+    if (!ALLOWED_SERVERS.includes(base)) return send(req, res, 403, { error: 'Provider server not allowed' });
     const params = body.params && typeof body.params === 'object' ? body.params : {};
     const action = String(params.action || '');
-    if (!ALLOWED_ACTIONS.has(action)) return send(res, 400, { error: 'Unsupported action' });
+    if (!ALLOWED_ACTIONS.has(action)) return send(req, res, 400, { error: 'Unsupported action' });
 
     const target = new URL(base + '/player_api.php');
     target.searchParams.set('username', String(body.username));
@@ -71,16 +87,20 @@ const server = http.createServer(async (req, res) => {
     }
 
     const upstream = await fetch(target, {
-      headers: { 'User-Agent': 'XtreamlyTV-API-Bridge/0.4' },
+      headers: { 'User-Agent': 'XtreamlyTV-API-Bridge/0.7' },
+      redirect: 'error',
       signal: AbortSignal.timeout(18000)
     });
-    const text = await upstream.text();
-    cors(res);
+    const declaredLength = Number(upstream.headers.get('content-length') || 0);
+    if (declaredLength > MAX_RESPONSE_BYTES) return send(req, res, 502, { error: 'Upstream response too large' });
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    if (buffer.length > MAX_RESPONSE_BYTES) return send(req, res, 502, { error: 'Upstream response too large' });
+    cors(req, res);
     res.statusCode = upstream.status;
     res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/json; charset=utf-8');
-    res.end(text);
+    res.end(buffer);
   } catch (error) {
-    send(res, 502, { error: error.message || 'Upstream request failed' });
+    send(req, res, 502, { error: error.message || 'Upstream request failed' });
   }
 });
 

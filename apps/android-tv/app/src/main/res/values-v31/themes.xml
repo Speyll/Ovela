@@ -1,4 +1,13 @@
 <resources>
+    <style name="Theme.XtreamlyTV" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">#02050A</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_empty</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">#02050A</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
     <style name="Theme.XtreamlyTV.Starting" parent="Theme.SplashScreen">
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowIsTranslucent">false</item>

@@ -29,6 +29,7 @@ jobs:
         run: |
           npm run check:webos
           npm run test:core
+          npm run test:bridge
       - name: Install browser smoke-test dependencies
         run: |
           python -m pip install -r apps/webos/tests/requirements.txt

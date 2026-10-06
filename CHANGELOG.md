@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 release hardening
+
+- Isolated provider state and caches, discarded stale responses, and bounded
+  long-session metadata retention on webOS and Android TV.
+- Restored failed Live TV channel artwork in local favorites when provider icon
+  endpoints recover.
+- Removed Android's duplicate static startup logo and improved player lifecycle.
+- Hardened the optional API bridge with authentication and allowlists.
+- Added production v0.7 browser coverage, bridge tests, and Gitea CI.
+
 ## 0.7.0 - 2026-08-23
 
 ### webOS living-room UI refresh

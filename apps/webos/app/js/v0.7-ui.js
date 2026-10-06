@@ -48,6 +48,31 @@
     artworkImageOrder:[]
   };
 
+  function boundCache(cache, limit) {
+    var keys = Object.keys(cache);
+    keys.slice(0, Math.max(0, keys.length - limit)).forEach(function (key) { delete cache[key]; });
+  }
+
+  App.resetMetadata = function (clearPersistent) {
+    V.heroGeneration += 1;
+    V.epgGeneration += 1;
+    V.backdropGeneration += 1;
+    [V.heroTimer, V.backdropTimer, V.adjacentBackdropTimer, V.richPrefetchTimer].forEach(clearTimeout);
+    Object.keys(V.posterPrefetchTimers).forEach(function (kind) { V.posterPrefetchTimers[kind].forEach(clearTimeout); V.posterPrefetchTimers[kind] = []; });
+    stopTimeline();
+    V.detailCache = {};
+    V.epgCache = {};
+    V.epgPending = {};
+    V.richPrefetchPromises = {};
+    V.artworkPreload = {};
+    V.artworkImageCache = {};
+    V.artworkImageOrder = [];
+    V.persistentMediaCache = null;
+    V.persistentMediaCacheScope = '';
+    V.persistentMediaCacheWarmed = false;
+    if (clearPersistent) { try { localStorage.removeItem(MEDIA_CACHE_STORAGE_KEY); } catch (_) {} }
+  };
+
   var legacy = {
     renderCatalog:App.renderCatalog,
     updateCatalogGrid:App.updateCatalogGrid,
@@ -326,7 +351,7 @@
   function logoHtml(item) {
     var image = imageOf(item, 'live');
     return '<div class="v07-station-logo">' +
-      (image ? '<img src="' + esc(image) + '" alt="" loading="lazy" decoding="async" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'grid\'">' : '') +
+      (image ? '<img data-channel-art="true" src="' + esc(image) + '" alt="" loading="lazy" decoding="async" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'grid\'">' : '') +
       '<span' + (image ? ' style="display:none"' : '') + '>' + esc(initials(titleOf(item))) + '</span></div>';
   }
 
@@ -1093,12 +1118,14 @@
     App.currentItems[kind] = [];
     setCatalogActivity('Loading category…');
 
+    var session = App.sessionGeneration;
     var promise;
     try { promise = App.loadCategory(kind, category); }
     catch (error) { promise = Promise.reject(error); }
 
     if (!promise || !promise.then) return Promise.resolve([]);
     return promise.then(function (items) {
+      if (session !== App.sessionGeneration) return [];
       /* v0.6 deduplicates an already-running request before allocating a new
          generation. If the user leaves and returns to that category while the
          request is still pending, its original generation can be stale and
@@ -1115,7 +1142,7 @@
       }
       return items;
     }).catch(function (error) {
-      if (App.currentView === kind &&
+      if (session === App.sessionGeneration && App.currentView === kind &&
           String(App.activeCategory[kind] || '') === category) {
         clearCatalogActivity();
       }
@@ -1188,7 +1215,7 @@ function mediaWindow(kind, items, index) {
 
   function mediaCacheScope() {
     if (!App.api || App.demo) return 'demo';
-    return mediaCacheHash(String(App.api.server || '') + '\n' + String(App.api.username || ''));
+    return window.XtreamlyCore.providerKey(App.api);
   }
 
   function mediaCacheLoad() {
@@ -1358,21 +1385,26 @@ function mediaWindow(kind, items, index) {
     if (persisted) {
       var cachedRich = mergeMovieDetail(item, persisted);
       V.detailCache[key] = cachedRich;
+      boundCache(V.detailCache, 60);
       preloadArtwork(firstBackdrop(cachedRich));
       return Promise.resolve(cachedRich);
     }
     if (V.richPrefetchPromises[key]) return V.richPrefetchPromises[key];
     if (!App.api || !App.api.getVodInfo) return Promise.resolve(item);
+    var session = App.sessionGeneration;
     var request;
     try { request = App.api.getVodInfo(idOf(item, 'movie')); } catch (error) { return Promise.resolve(item); }
     V.richPrefetchPromises[key] = request.then(function (response) {
+      if (session !== App.sessionGeneration) return item;
       mediaCachePut('movie', idOf(item, 'movie'), response);
       var rich = mergeMovieDetail(item, response);
       V.detailCache[key] = rich;
+      boundCache(V.detailCache, 60);
       preloadArtwork(firstBackdrop(rich));
       delete V.richPrefetchPromises[key];
       return rich;
     }).catch(function () {
+      if (session !== App.sessionGeneration) return item;
       delete V.richPrefetchPromises[key];
       return item;
     });
@@ -1595,6 +1627,7 @@ function queueMediaBackdrop(kind, item, rich) {
       if (stored) {
         persisted = mergeMovieDetail(item, stored);
         V.detailCache[key] = persisted;
+        boundCache(V.detailCache, 60);
       }
     }
     if (persisted) {
@@ -2003,11 +2036,12 @@ function updateMediaCatalog(kind) {
 
   function fillEpgTrack(channel, generation, start, end) {
     var id = idOf(channel, 'live');
+    var session = App.sessionGeneration;
     var cached = V.epgCache[id];
     var fresh = cached && Date.now() - cached.at < 300000;
 
     function paint(entries) {
-      if (generation !== V.epgGeneration || App.currentView !== 'live') return;
+      if (session !== App.sessionGeneration || generation !== V.epgGeneration || App.currentView !== 'live') return;
       var selector = '[data-v07-epg-id="' + String(id).replace(/"/g, '\\"') + '"]';
       var current = document.querySelector(selector);
       if (!current) return;
@@ -2024,8 +2058,17 @@ function updateMediaCatalog(kind) {
       return;
     }
     try {
-      App.api.getShortEpg(channel.stream_id).then(function (entries) {
+      V.epgPending = V.epgPending || {};
+      if (!V.epgPending[id]) {
+        V.epgPending[id] = App.api.getShortEpg(channel.stream_id).then(function (entries) {
+          if (session === App.sessionGeneration) delete V.epgPending[id];
+          return entries;
+        }, function (error) { if (session === App.sessionGeneration) delete V.epgPending[id]; throw error; });
+      }
+      V.epgPending[id].then(function (entries) {
+        if (session !== App.sessionGeneration) return;
         V.epgCache[id] = { at:Date.now(), entries:entries || [] };
+        boundCache(V.epgCache, 80);
         paint(entries || []);
       }).catch(function () { paint([]); });
     } catch (error) { paint([]); }
@@ -2167,6 +2210,7 @@ function updateMediaCatalog(kind) {
         return;
       }
       refreshTimeline();
+      renderLiveWindow(false);
     }, 30000);
   }
 
@@ -3158,7 +3202,9 @@ function bindHomeFocusScrolling(home) {
     self.renderShell(returnView);
     if (cached) return;
 
+    var pendingDetail = self.detail, session = App.sessionGeneration;
     self.api.getSeriesInfo(series.series_id).then(function (response) {
+      if (session !== App.sessionGeneration || self.detail !== pendingDetail) return;
       if (!self.detail || self.detail.type !== 'series' || String(self.detail.item.series_id) !== String(series.series_id)) return;
       var compact = compactSeriesResponse(response || {});
       mediaCachePut('series', idOf(series, 'series'), compact);
@@ -3168,7 +3214,7 @@ function bindHomeFocusScrolling(home) {
       self.detail.season = seasons.length ? seasons[0] : null;
       self.renderView();
     }).catch(function (error) {
-      if (!self.detail) return;
+      if (session !== App.sessionGeneration || self.detail !== pendingDetail) return;
       self.detail.loading = false;
       self.detail.info = { info:series, episodes:{} };
       self.detail.error = error.message || 'Series details are unavailable.';

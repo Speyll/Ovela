@@ -91,3 +91,37 @@ test('favoriteAutoSort defaults to enabled and can be disabled', () => {
   store.updateSettings({ favoriteAutoSort: false });
   assert.equal(store.getState().settings.favoriteAutoSort, false);
 });
+
+test('keeps favorites, history, and progress isolated by provider account', () => {
+  const store = createStore();
+  const providerA = { server: 'http://provider-a.test/', username: 'alice', password: 'one' };
+  const providerB = { server: 'http://provider-b.test', username: 'bob', password: 'two' };
+
+  store.saveCredentials(providerA);
+  store.toggleFavorite({ stream_id: 42, name: 'Provider A', content_type: 'live' }, 'live');
+  store.addRecent({ stream_id: 42, name: 'Provider A', content_type: 'live' }, 'live');
+  store.saveProgress('movie', '42', 120, 600);
+
+  store.saveCredentials(providerB);
+  assert.equal(store.getState().favorites.length, 0);
+  assert.equal(store.getState().recent.length, 0);
+  assert.equal(store.getProgress('movie', '42'), null);
+  store.toggleFavorite({ stream_id: 42, name: 'Provider B', content_type: 'live' }, 'live');
+
+  store.saveCredentials(providerA);
+  assert.equal(store.getState().favorites[0].name, 'Provider A');
+  assert.equal(store.getState().recent[0].name, 'Provider A');
+  assert.equal(store.getProgress('movie', '42').seconds, 120);
+});
+
+test('refreshes saved channel artwork when a provider recovers or changes its icon URL', () => {
+  const store = createStore();
+  store.saveCredentials({ server: 'http://provider.test', username: 'user', password: 'pass' });
+  store.toggleFavorite({ stream_id: 7, name: 'News', stream_icon: 'http://old.test/7.png', content_type: 'live' }, 'live');
+  store.addRecent({ stream_id: 7, name: 'News', stream_icon: 'http://old.test/7.png', content_type: 'live' }, 'live');
+
+  store.refreshArtwork([{ stream_id: 7, stream_icon: 'http://restored.test/7.png' }], 'live');
+  const state = store.getState();
+  assert.equal(state.favorites[0].stream_icon, 'http://restored.test/7.png');
+  assert.equal(state.recent[0].stream_icon, 'http://restored.test/7.png');
+});

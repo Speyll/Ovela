@@ -659,7 +659,6 @@ fun LoadingOverlay(label: String = "Loading…") {
 @Composable
 fun AppLoadingScreen(onFinished: () -> Unit) {
     val theme = LocalAppTheme.current
-    val colors = palette()
     val context = LocalContext.current
     val themeName = when (theme) {
         AppTheme.BLUE -> "blue"
@@ -738,6 +737,12 @@ fun AppLoadingScreen(onFinished: () -> Unit) {
         }
     }
 
+    // A broken WebView must not leave the app permanently on the startup screen.
+    LaunchedEffect(Unit) {
+        delay(8000L)
+        onFinished()
+    }
+
     // Measure the hold from the animation start, not from Activity creation.
     // Cold WebView startup can take longer, but it can no longer consume the
     // animation's display window and leave the user with sound-only startup.
@@ -753,33 +758,6 @@ fun AppLoadingScreen(onFinished: () -> Unit) {
             .background(Color(0xFF02050A)),
         contentAlignment = Alignment.Center,
     ) {
-        // Deterministic native fallback shown while Chromium initializes.
-        // It is intentionally static; the exact webOS animation starts only once
-        // its page is ready, so cold and warm launches now follow the same sequence.
-        Row(
-            modifier = Modifier
-                .graphicsLayer { alpha = if (animationStarted) 0f else 1f },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                "X",
-                color = colors.accent,
-                fontFamily = XtreamlyFontFamily,
-                fontSize = 46.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-3).sp,
-            )
-            Text(
-                "treamlyTV",
-                color = Color(0xFFF4F8FF),
-                fontFamily = XtreamlyFontFamily,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = (-1).sp,
-            )
-        }
-
         AndroidView(
             modifier = Modifier
                 .fillMaxSize()

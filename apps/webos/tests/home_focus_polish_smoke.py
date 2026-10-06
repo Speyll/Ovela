@@ -62,7 +62,6 @@ def main() -> None:
 
         headings = page.locator(".scroll-view .section-head h2").all_inner_texts()
         for heading in (
-            "Continue watching",
             "Continue watching Live TV",
             "Continue watching Movies",
             "Continue watching Series",
@@ -106,14 +105,14 @@ def main() -> None:
             """el => ({
                 width:el.getBoundingClientRect().width,
                 height:el.getBoundingClientRect().height,
-                opacity:getComputedStyle(el, '::after').opacity,
-                shadow:getComputedStyle(el, '::after').boxShadow
+                opacity:getComputedStyle(el.querySelector('.poster-focus-ring')).opacity,
+                border:getComputedStyle(el.querySelector('.poster-focus-ring')).borderTopWidth
             })"""
         )
         assert abs(after["width"] - before["width"]) < 0.1
         assert abs(after["height"] - before["height"]) < 0.1
         assert after["opacity"] == "1"
-        assert "4px" in after["shadow"]
+        assert after["border"] == "4px"
 
         assert not errors, errors
         browser.close()
