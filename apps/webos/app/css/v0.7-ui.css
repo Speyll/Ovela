@@ -6837,10 +6837,20 @@
     rgba(1,2,4,.97) 100%) !important;
 }
 
-/* Home artwork paints reliably as a CSS hero background on webOS 6.5. Keep
-   the legacy image layer hidden so the artwork is drawn exactly once. */
+/* One full-canvas Home backdrop, with the shared opacity and vignette rules.
+   Explicit edges also support TV browsers that do not implement inset. */
 #v07RootMediaBackdrop[data-media-kind="home"] {
-  display:none !important;
+  display:block !important;
+  top:0 !important;
+  right:0 !important;
+  bottom:0 !important;
+  left:0 !important;
+}
+#v07RootMediaBackdrop .v07-root-media-backdrop-scrim {
+  top:0 !important;
+  right:0 !important;
+  bottom:0 !important;
+  left:0 !important;
 }
 #v07HomeBackdrop {
   display:none !important;
@@ -6849,15 +6859,10 @@
   display:none !important;
 }
 .v07-home-hero {
-  background-image:var(--v07-home-art, url('../assets/home-live-backdrop.jpg')) !important;
-  background-position:center 34% !important;
-  background-repeat:no-repeat !important;
-  background-size:cover !important;
+  background-image:none !important;
 }
 .v07-home-scrim {
-  background:
-    linear-gradient(90deg, rgba(4,8,11,.94) 0%, rgba(4,8,11,.82) 30%, rgba(4,8,11,.60) 62%, rgba(4,8,11,.42) 100%),
-    linear-gradient(0deg, rgba(4,8,11,.90) 0%, rgba(4,8,11,.52) 24%, rgba(4,8,11,.30) 55%) !important;
+  display:none !important;
 }
 
 /* Give provider channel names room without changing the category wheel. */

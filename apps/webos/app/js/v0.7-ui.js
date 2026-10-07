@@ -1472,7 +1472,9 @@ function setRootCanvasBackdrop(kind, url) {
   var primary = host.querySelector('.v07-root-media-backdrop-layer');
   if (!primary) return;
 
-  url = artworkUrl(url);
+  // The packaged Home image is intentionally local; provider URL validation
+  // otherwise only accepts HTTP(S) and image data URLs.
+  url = url === HOME_LIVE_BACKDROP ? HOME_LIVE_BACKDROP : artworkUrl(url);
   if (!url) {
     primary.style.backgroundImage = '';
     primary.classList.remove('is-visible');
@@ -2387,9 +2389,8 @@ function updateMediaCatalog(kind) {
     if (App.currentView !== 'home') return;
     var visual = richVisual ? { item:richVisual, type:featuredType === 'episode' ? 'series' : featuredType } : homeVisualSource(featured, featuredType);
     var backdrop = homeBackdropFor(visual.item, visual.type);
-    var heroEl = document.querySelector('.v07-home-hero');
     var artEl = document.getElementById('v07HomeHeroArt');
-    if (heroEl) heroEl.style.setProperty('--v07-home-art', 'url(' + JSON.stringify(backdrop || HOME_LIVE_BACKDROP) + ')');
+    setRootCanvasBackdrop('home', backdrop || HOME_LIVE_BACKDROP);
     if (artEl && visual.item) {
       artEl.innerHTML = homeHeroArtHtml(visual.item, visual.type);
     }
@@ -2538,9 +2539,6 @@ function bindHomeFocusScrolling(home) {
         '</section>' +
         '<div class="v07-home-scroll" id="v07HomeScroll">' + rowsHtml + '</div>' +
       '</div>';
-
-    var homeHero = view.querySelector('.v07-home-hero');
-    if (homeHero) homeHero.style.setProperty('--v07-home-art', 'url(' + JSON.stringify(heroBackdrop || HOME_LIVE_BACKDROP) + ')');
 
     var watch = document.getElementById('v07HomeWatch');
     if (watch) watch.addEventListener('click', function () { playHomeFeatured(featured, featuredType); });
