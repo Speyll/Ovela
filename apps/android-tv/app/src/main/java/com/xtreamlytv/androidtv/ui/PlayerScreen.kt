@@ -1,5 +1,6 @@
 package com.xtreamlytv.androidtv.ui
 
+import android.content.Context
 import android.view.KeyEvent as AndroidKeyEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -54,6 +55,8 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.xtreamlytv.androidtv.model.ContentType
@@ -89,7 +92,12 @@ fun PlayerScreen(
     var subtitlesEnabled by remember(request.item.id) { mutableStateOf(false) }
 
     val player = remember(request.item.id, candidateIndex) {
-        val renderersFactory = DefaultRenderersFactory(context)
+        val renderersFactory = if (request.item.type == ContentType.LIVE) {
+            DefaultRenderersFactory(context)
+        } else {
+            pcmVodRenderersFactory(context)
+        }
+        renderersFactory
             .setEnableDecoderFallback(true)
             .also { factory ->
                 // Several Android TV vendor codecs develop a small A/V offset
@@ -331,6 +339,22 @@ fun PlayerScreen(
         }
     }
 }
+
+@Suppress("DEPRECATION")
+private fun pcmVodRenderersFactory(context: Context): DefaultRenderersFactory =
+    object : DefaultRenderersFactory(context) {
+        override fun buildAudioSink(
+            context: Context,
+            enableFloatOutput: Boolean,
+            enableAudioOutputPlaybackParams: Boolean,
+        ): AudioSink = DefaultAudioSink.Builder()
+            // A context-free sink intentionally advertises no encoded-audio
+            // passthrough. The codec therefore decodes AC-3/E-AC-3 to PCM and
+            // Media3 can keep audio on the same clock as rendered video.
+            .setEnableFloatOutput(enableFloatOutput)
+            .setEnableAudioTrackPlaybackParams(enableAudioOutputPlaybackParams)
+            .build()
+    }
 
 @Composable
 private fun PlaybackOptions(
