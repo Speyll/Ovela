@@ -8,11 +8,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -27,30 +32,32 @@ import com.xtreamlytv.androidtv.model.hiddenCategoryIds
 import com.xtreamlytv.androidtv.ui.theme.palette
 import kotlinx.coroutines.delay
 
-private data class VisibilitySection(
-    val type: ContentType,
-    val title: String,
-    val categories: List<Category>,
-)
-
 @Composable
 fun CategoryVisibilityScreen(
     state: AppUiState,
     viewModel: AppViewModel,
     contentEntryFocus: FocusRequester,
 ) {
-    val sections = listOf(
-        VisibilitySection(ContentType.LIVE, "Live TV", state.categories[ContentType.LIVE].visibleProviderCategories()),
-        VisibilitySection(ContentType.MOVIE, "Movies", state.categories[ContentType.MOVIE].visibleProviderCategories()),
-        VisibilitySection(ContentType.SERIES, "Series", state.categories[ContentType.SERIES].visibleProviderCategories()),
-    )
-    val firstCategory = sections.firstNotNullOfOrNull { section -> section.categories.firstOrNull()?.let { section.type to it.id } }
-
-    LaunchedEffect(firstCategory) {
-        if (firstCategory != null) {
-            delay(32L)
-            runCatching { contentEntryFocus.requestFocus() }
+    var selectedType by remember { mutableStateOf(ContentType.LIVE) }
+    var query by remember { mutableStateOf("") }
+    var hiddenOnly by remember { mutableStateOf(false) }
+    val categoryLists = remember(state.categories) {
+        listOf(ContentType.LIVE, ContentType.MOVIE, ContentType.SERIES)
+            .associateWith { type -> state.categories[type].visibleProviderCategories() }
+    }
+    val hiddenIds = state.settings.hiddenCategoryIds(selectedType)
+    val providerCategories = categoryLists[selectedType].orEmpty()
+    val normalizedQuery = query.trim()
+    val results = remember(providerCategories, hiddenIds, normalizedQuery, hiddenOnly) {
+        providerCategories.filter { category ->
+            (!hiddenOnly || category.id in hiddenIds) &&
+                (normalizedQuery.isBlank() || category.name.contains(normalizedQuery, ignoreCase = true))
         }
+    }
+
+    LaunchedEffect(Unit) {
+        delay(32L)
+        runCatching { contentEntryFocus.requestFocus() }
     }
 
     LazyColumn(
@@ -59,40 +66,64 @@ fun CategoryVisibilityScreen(
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         item("visibility-intro") {
-            Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            Column(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text("Provider category visibility", color = palette().text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     "Hidden categories are removed from category wheels, Home, and Favorites. This local filter is not PIN-protected.",
                     color = palette().muted,
                     fontSize = 9.sp,
                 )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SearchField(
+                        value = query,
+                        onValueChange = { query = it },
+                        placeholder = "Search ${selectedType.visibilityTitle().lowercase()} categories",
+                        modifier = Modifier.weight(1f),
+                        focusRequester = contentEntryFocus,
+                    )
+                    if (query.isNotEmpty()) {
+                        TvButton("Clear", { query = "" }, Modifier.width(68.dp), TvButtonStyle.Secondary)
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    listOf(ContentType.LIVE, ContentType.MOVIE, ContentType.SERIES).forEach { type ->
+                        TvChip(
+                            label = "${type.visibilityTitle()} (${categoryLists[type].orEmpty().size})",
+                            selected = selectedType == type,
+                            onClick = { selectedType = type },
+                        )
+                    }
+                    TvChip(
+                        label = "Hidden only (${hiddenIds.size})",
+                        selected = hiddenOnly,
+                        onClick = { hiddenOnly = !hiddenOnly },
+                    )
+                }
+                Text(
+                    "${results.size} matching ${if (results.size == 1) "category" else "categories"}",
+                    color = palette().muted,
+                    fontSize = 8.5.sp,
+                )
             }
         }
 
-        sections.forEach { section ->
-            item("header:${section.type}") {
+        if (results.isEmpty()) {
+            item("empty:$selectedType:$normalizedQuery:$hiddenOnly") {
                 Text(
-                    section.title,
-                    color = palette().accent,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+                    if (providerCategories.isEmpty()) "No provider categories loaded" else "No categories match these filters.",
+                    color = palette().muted,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(vertical = 18.dp),
                 )
             }
-            if (section.categories.isEmpty()) {
-                item("empty:${section.type}") {
-                    Text("No provider categories loaded", color = palette().muted, fontSize = 9.sp)
-                }
-            } else {
-                items(section.categories, key = { "${section.type}:${it.id}" }) { category ->
-                    val hidden = category.id in state.settings.hiddenCategoryIds(section.type)
-                    VisibilityCategoryRow(
-                        category = category,
-                        hidden = hidden,
-                        onClick = { viewModel.setProviderCategoryHidden(section.type, category.id, !hidden) },
-                        modifier = if (firstCategory == (section.type to category.id)) Modifier.focusRequester(contentEntryFocus) else Modifier,
-                    )
-                }
+        } else {
+            items(results, key = { "$selectedType:${it.id}" }) { category ->
+                val hidden = category.id in hiddenIds
+                VisibilityCategoryRow(
+                    category = category,
+                    hidden = hidden,
+                    onClick = { viewModel.setProviderCategoryHidden(selectedType, category.id, !hidden) },
+                )
             }
         }
     }
@@ -100,6 +131,12 @@ fun CategoryVisibilityScreen(
 
 private fun List<Category>?.visibleProviderCategories(): List<Category> =
     orEmpty().filter { it.id != "all" && !it.id.startsWith("__") }
+
+private fun ContentType.visibilityTitle(): String = when (this) {
+    ContentType.LIVE -> "Live TV"
+    ContentType.MOVIE -> "Movies"
+    ContentType.SERIES, ContentType.EPISODE -> "Series"
+}
 
 @Composable
 private fun VisibilityCategoryRow(
