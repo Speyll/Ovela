@@ -126,8 +126,27 @@ fun PlayerScreen(
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled)
                 .build()
             val resumePosition = position.coerceAtLeast(request.startPositionMs)
-            if (resumePosition > 0L && request.item.type != ContentType.LIVE) seekTo(resumePosition)
-            playWhenReady = true
+            val shouldResume = resumePosition > 0L && request.item.type != ContentType.LIVE
+            if (shouldResume) {
+                // Some MediaTek decoders retain an incorrect crop/aspect when
+                // their first decode begins at a mid-stream seek point. Allow
+                // the initial track format to configure the decoder, then seek
+                // before starting playback.
+                playWhenReady = false
+                addListener(object : Player.Listener {
+                    private var resumePending = true
+
+                    override fun onTracksChanged(tracks: Tracks) {
+                        if (!resumePending || tracks.groups.none { it.type == C.TRACK_TYPE_VIDEO }) return
+                        resumePending = false
+                        removeListener(this)
+                        seekTo(resumePosition)
+                        playWhenReady = true
+                    }
+                })
+            } else {
+                playWhenReady = true
+            }
             prepare()
         }
     }
