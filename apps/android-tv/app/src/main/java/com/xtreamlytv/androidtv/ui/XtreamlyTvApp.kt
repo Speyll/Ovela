@@ -163,6 +163,7 @@ private fun AppShell(state: AppUiState, viewModel: AppViewModel) {
                         AppScreen.FavoriteGroupsManager -> StableFavoriteGroupsManagerScreen(state, viewModel)
                         is AppScreen.FavoriteGroupEditor -> FavoriteGroupEditorScreen(screen.groupId, state, viewModel)
                         AppScreen.Settings -> SettingsScreen(state, viewModel, contentEntryFocus)
+                        AppScreen.CategoryVisibility -> CategoryVisibilityScreen(state, viewModel, contentEntryFocus)
                         else -> Unit
                     }
                 }
@@ -358,6 +359,7 @@ private fun AppScreen.section(): AppSection = when (this) {
     is AppScreen.Detail -> origin.section()
     AppScreen.Favorites, is AppScreen.FavoriteGroupBrowser, AppScreen.FavoriteGroupsManager, is AppScreen.FavoriteGroupEditor -> AppSection.Settings
     AppScreen.Settings -> AppSection.Settings
+    AppScreen.CategoryVisibility -> AppSection.Settings
     is AppScreen.Player -> origin.section()
     AppScreen.Login -> AppSection.Home
 }

@@ -67,6 +67,7 @@ sealed interface AppScreen {
         val returnFocus: FocusRequest? = null,
     ) : AppScreen
     data object Settings : AppScreen
+    data object CategoryVisibility : AppScreen
 }
 
 data class AppUiState(
@@ -372,6 +373,10 @@ val state: StateFlow<AppUiState> = _state.asStateFlow()
 
     fun openSettings() = _state.update {
         it.copy(screen = AppScreen.Settings, items = emptyList(), searchQuery = "", error = null, focusRequest = null)
+    }
+
+    fun openCategoryVisibility() = _state.update {
+        it.copy(screen = AppScreen.CategoryVisibility, items = emptyList(), searchQuery = "", error = null, focusRequest = null)
     }
 
     fun openCatalog(type: ContentType) {
@@ -983,6 +988,7 @@ val state: StateFlow<AppUiState> = _state.asStateFlow()
             }
             AppScreen.FavoriteGroupsManager -> openSettings()
             is AppScreen.FavoriteGroupEditor -> openFavoriteGroupsManager()
+            AppScreen.CategoryVisibility -> openSettings()
             is AppScreen.Catalog, AppScreen.Favorites, is AppScreen.FavoriteGroupBrowser, AppScreen.Settings -> openHome()
         }
     }
