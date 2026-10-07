@@ -2330,6 +2330,7 @@ function updateMediaCatalog(kind) {
     if (!backdrop) return '<div class="v07-home-backdrop" id="v07HomeBackdrop"></div>';
     return '<div class="v07-home-backdrop has-art" id="v07HomeBackdrop">' +
       '<img class="v07-home-backdrop-art" id="v07HomeBackdropArt" src="' + esc(backdrop) + '" alt="" draggable="false" ' +
+      'loading="eager" decoding="sync" ' +
       'onerror="this.parentNode.classList.remove(\'has-art\');this.style.display=\'none\';">' +
       '</div>';
   }
@@ -2403,6 +2404,8 @@ function updateMediaCatalog(kind) {
           backdropArt.className = 'v07-home-backdrop-art';
           backdropArt.alt = '';
           backdropArt.draggable = false;
+          backdropArt.loading = 'eager';
+          backdropArt.decoding = 'sync';
           backdropArt.onerror = function () {
             backdropEl.classList.remove('has-art');
             this.style.display = 'none';
