@@ -49,7 +49,10 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -58,6 +61,7 @@ import com.xtreamlytv.androidtv.model.PlayerRequest
 import com.xtreamlytv.androidtv.ui.theme.palette
 import kotlinx.coroutines.delay
 
+@androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
     request: PlayerRequest,
@@ -85,11 +89,26 @@ fun PlayerScreen(
     var subtitlesEnabled by remember(request.item.id) { mutableStateOf(false) }
 
     val player = remember(request.item.id, candidateIndex) {
-        ExoPlayer.Builder(context).build().apply {
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setEnableDecoderFallback(true)
+            .also { factory ->
+                // Several Android TV vendor codecs develop a small A/V offset
+                // with asynchronous queueing on long-form MP4/MKV playback.
+                // Live streams use a different segmented timing path and retain
+                // the platform default for lowest channel-change latency.
+                if (request.item.type != ContentType.LIVE) {
+                    factory.forceDisableMediaCodecAsynchronousQueueing()
+                }
+            }
+        val audioOffloadPreferences = TrackSelectionParameters.AudioOffloadPreferences.Builder()
+            .setAudioOffloadMode(TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED)
+            .build()
+        ExoPlayer.Builder(context, renderersFactory).build().apply {
             val candidate = request.urlCandidates.getOrElse(candidateIndex) { request.urlCandidates.first() }
             setMediaItem(MediaItem.fromUri(candidate))
             trackSelectionParameters = trackSelectionParameters
                 .buildUpon()
+                .setAudioOffloadPreferences(audioOffloadPreferences)
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled)
                 .build()
             val resumePosition = position.coerceAtLeast(request.startPositionMs)
