@@ -6837,24 +6837,27 @@
     rgba(1,2,4,.97) 100%) !important;
 }
 
-/* Home's bundled backdrop is a local, decoded <img> inside the hero. The
-   root-canvas replacement is unreliable on some webOS 6.5 Chromium builds,
-   where it can paint below the app canvas. Keep the proven local layer for
-   Home and reserve the root canvas for remote Movies/Series artwork. */
+/* Home artwork paints reliably as a CSS hero background on webOS 6.5. Keep
+   the legacy image layer hidden so the artwork is drawn exactly once. */
 #v07RootMediaBackdrop[data-media-kind="home"] {
   display:none !important;
 }
 #v07HomeBackdrop {
-  display:block !important;
+  display:none !important;
 }
 #v07HomeBackdrop.has-art {
-  display:block !important;
+  display:none !important;
 }
 .v07-home-hero {
-  background-image:url('../assets/home-live-backdrop.jpg') !important;
+  background-image:var(--v07-home-art, url('../assets/home-live-backdrop.jpg')) !important;
   background-position:center 34% !important;
   background-repeat:no-repeat !important;
   background-size:cover !important;
+}
+.v07-home-scrim {
+  background:
+    linear-gradient(90deg, rgba(4,8,11,.94) 0%, rgba(4,8,11,.82) 30%, rgba(4,8,11,.60) 62%, rgba(4,8,11,.42) 100%),
+    linear-gradient(0deg, rgba(4,8,11,.90) 0%, rgba(4,8,11,.52) 24%, rgba(4,8,11,.30) 55%) !important;
 }
 
 /* Give provider channel names room without changing the category wheel. */

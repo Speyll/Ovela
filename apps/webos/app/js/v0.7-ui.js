@@ -2327,12 +2327,7 @@ function updateMediaCatalog(kind) {
   }
 
   function homeBackdropHtml(backdrop) {
-    if (!backdrop) return '<div class="v07-home-backdrop" id="v07HomeBackdrop"></div>';
-    return '<div class="v07-home-backdrop has-art" id="v07HomeBackdrop">' +
-      '<img class="v07-home-backdrop-art" id="v07HomeBackdropArt" src="' + esc(backdrop) + '" alt="" draggable="false" ' +
-      'loading="eager" decoding="sync" ' +
-      'onerror="this.parentNode.classList.remove(\'has-art\');this.style.display=\'none\';">' +
-      '</div>';
+    return '<div class="v07-home-backdrop" id="v07HomeBackdrop"></div>';
   }
 
   function homeHeroTypeLabel(type) {
@@ -2392,36 +2387,9 @@ function updateMediaCatalog(kind) {
     if (App.currentView !== 'home') return;
     var visual = richVisual ? { item:richVisual, type:featuredType === 'episode' ? 'series' : featuredType } : homeVisualSource(featured, featuredType);
     var backdrop = homeBackdropFor(visual.item, visual.type);
-    var backdropEl = document.getElementById('v07HomeBackdrop');
-    var backdropArt = document.getElementById('v07HomeBackdropArt');
+    var heroEl = document.querySelector('.v07-home-hero');
     var artEl = document.getElementById('v07HomeHeroArt');
-    if (backdropEl) {
-      if (backdrop) {
-        backdropEl.classList.add('has-art');
-        if (!backdropArt) {
-          backdropArt = document.createElement('img');
-          backdropArt.id = 'v07HomeBackdropArt';
-          backdropArt.className = 'v07-home-backdrop-art';
-          backdropArt.alt = '';
-          backdropArt.draggable = false;
-          backdropArt.loading = 'eager';
-          backdropArt.decoding = 'sync';
-          backdropArt.onerror = function () {
-            backdropEl.classList.remove('has-art');
-            this.style.display = 'none';
-          };
-          backdropEl.appendChild(backdropArt);
-        }
-        backdropArt.style.display = '';
-        if (backdropArt.getAttribute('src') !== String(backdrop)) backdropArt.setAttribute('src', String(backdrop));
-      } else {
-        backdropEl.classList.remove('has-art');
-        if (backdropArt) {
-          backdropArt.removeAttribute('src');
-          backdropArt.style.display = 'none';
-        }
-      }
-    }
+    if (heroEl) heroEl.style.setProperty('--v07-home-art', 'url(' + JSON.stringify(backdrop || HOME_LIVE_BACKDROP) + ')');
     if (artEl && visual.item) {
       artEl.innerHTML = homeHeroArtHtml(visual.item, visual.type);
     }
@@ -2570,6 +2538,9 @@ function bindHomeFocusScrolling(home) {
         '</section>' +
         '<div class="v07-home-scroll" id="v07HomeScroll">' + rowsHtml + '</div>' +
       '</div>';
+
+    var homeHero = view.querySelector('.v07-home-hero');
+    if (homeHero) homeHero.style.setProperty('--v07-home-art', 'url(' + JSON.stringify(heroBackdrop || HOME_LIVE_BACKDROP) + ')');
 
     var watch = document.getElementById('v07HomeWatch');
     if (watch) watch.addEventListener('click', function () { playHomeFeatured(featured, featuredType); });
