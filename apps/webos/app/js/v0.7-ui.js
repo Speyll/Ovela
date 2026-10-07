@@ -2494,7 +2494,9 @@ function bindHomeFocusScrolling(home) {
     var featured = recent[0] || (firstVisibleLoadedItem('movies') || firstVisibleLoadedItem('live') || firstVisibleLoadedItem('series'));
     var featuredType = featured ? resolveRecentType(featured) : 'live';
     var featuredVisual = homeVisualSource(featured, featuredType);
-    var heroBackdrop = featured ? homeBackdropFor(featuredVisual.item, featuredVisual.type) : '';
+    // Home should retain its branded Live TV canvas while content is still
+    // loading or a new account has no watch history yet.
+    var heroBackdrop = featured ? homeBackdropFor(featuredVisual.item, featuredVisual.type) : HOME_LIVE_BACKDROP;
     setRootCanvasBackdrop('home', heroBackdrop);
     var heroDescription = featured ? (descriptionOf(featuredVisual.item) || descriptionOf(featured) || 'Continue where you left off.') : 'Choose Live TV, Movies, or Series from the navigation above.';
     var heroTitle = featured ? titleOf(featured) : 'Your TV, one remote away';
