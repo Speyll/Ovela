@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,6 +42,9 @@ fun CategoryVisibilityScreen(
     var selectedType by remember { mutableStateOf(ContentType.LIVE) }
     var query by remember { mutableStateOf("") }
     var hiddenOnly by remember { mutableStateOf(false) }
+    val typeFocusers = remember { List(3) { FocusRequester() } }
+    val hiddenOnlyFocus = remember { FocusRequester() }
+    val firstResultFocus = remember { FocusRequester() }
     val categoryLists = remember(state.categories) {
         listOf(ContentType.LIVE, ContentType.MOVIE, ContentType.SERIES)
             .associateWith { type -> state.categories[type].visibleProviderCategories() }
@@ -78,7 +82,7 @@ fun CategoryVisibilityScreen(
                         value = query,
                         onValueChange = { query = it },
                         placeholder = "Search ${selectedType.visibilityTitle().lowercase()} categories",
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).focusProperties { down = typeFocusers.first() },
                         focusRequester = contentEntryFocus,
                     )
                     if (query.isNotEmpty()) {
@@ -86,17 +90,31 @@ fun CategoryVisibilityScreen(
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    listOf(ContentType.LIVE, ContentType.MOVIE, ContentType.SERIES).forEach { type ->
+                    listOf(ContentType.LIVE, ContentType.MOVIE, ContentType.SERIES).forEachIndexed { index, type ->
                         TvChip(
                             label = "${type.visibilityTitle()} (${categoryLists[type].orEmpty().size})",
                             selected = selectedType == type,
                             onClick = { selectedType = type },
+                            modifier = Modifier.focusProperties {
+                                left = if (index == 0) hiddenOnlyFocus else typeFocusers[index - 1]
+                                right = if (index == typeFocusers.lastIndex) hiddenOnlyFocus else typeFocusers[index + 1]
+                                up = contentEntryFocus
+                                if (results.isNotEmpty()) down = firstResultFocus
+                            },
+                            focusRequester = typeFocusers[index],
                         )
                     }
                     TvChip(
                         label = "Hidden only (${hiddenIds.size})",
                         selected = hiddenOnly,
                         onClick = { hiddenOnly = !hiddenOnly },
+                        modifier = Modifier.focusProperties {
+                            left = typeFocusers.last()
+                            right = typeFocusers.first()
+                            up = contentEntryFocus
+                            if (results.isNotEmpty()) down = firstResultFocus
+                        },
+                        focusRequester = hiddenOnlyFocus,
                     )
                 }
                 Text(
@@ -123,6 +141,11 @@ fun CategoryVisibilityScreen(
                     category = category,
                     hidden = hidden,
                     onClick = { viewModel.setProviderCategoryHidden(selectedType, category.id, !hidden) },
+                    modifier = if (category.id == results.first().id) {
+                        Modifier
+                            .focusRequester(firstResultFocus)
+                            .focusProperties { up = typeFocusers[ContentType.entries.indexOf(selectedType).coerceIn(0, 2)] }
+                    } else Modifier,
                 )
             }
         }
