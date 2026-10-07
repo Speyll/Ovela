@@ -98,7 +98,7 @@ fun CatalogScreen(
             CatalogLoadingPill(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 8.dp, end = 10.dp),
+                    .padding(top = topContentPadding + 8.dp, end = 10.dp),
             )
         }
     }
