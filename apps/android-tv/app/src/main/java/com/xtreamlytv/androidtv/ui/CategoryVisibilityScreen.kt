@@ -1,5 +1,6 @@
 package com.xtreamlytv.androidtv.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -42,7 +43,9 @@ fun CategoryVisibilityScreen(
     var selectedType by remember { mutableStateOf(ContentType.LIVE) }
     var query by remember { mutableStateOf("") }
     var hiddenOnly by remember { mutableStateOf(false) }
-    val typeFocusers = remember { List(3) { FocusRequester() } }
+    var catalogMenuOpen by remember { mutableStateOf(false) }
+    val catalogSelectorFocus = remember { FocusRequester() }
+    val catalogOptionFocusers = remember { List(3) { FocusRequester() } }
     val hiddenOnlyFocus = remember { FocusRequester() }
     val firstResultFocus = remember { FocusRequester() }
     val categoryLists = remember(state.categories) {
@@ -59,9 +62,20 @@ fun CategoryVisibilityScreen(
         }
     }
 
+    BackHandler(enabled = catalogMenuOpen) {
+        catalogMenuOpen = false
+        runCatching { catalogSelectorFocus.requestFocus() }
+    }
+
     LaunchedEffect(Unit) {
         delay(32L)
         runCatching { contentEntryFocus.requestFocus() }
+    }
+    LaunchedEffect(catalogMenuOpen) {
+        if (catalogMenuOpen) {
+            delay(24L)
+            runCatching { catalogOptionFocusers.first().requestFocus() }
+        }
     }
 
     LazyColumn(
@@ -82,7 +96,7 @@ fun CategoryVisibilityScreen(
                         value = query,
                         onValueChange = { query = it },
                         placeholder = "Search ${selectedType.visibilityTitle().lowercase()} categories",
-                        modifier = Modifier.weight(1f).focusProperties { down = typeFocusers.first() },
+                        modifier = Modifier.weight(1f).focusProperties { down = catalogSelectorFocus },
                         focusRequester = contentEntryFocus,
                     )
                     if (query.isNotEmpty()) {
@@ -90,32 +104,46 @@ fun CategoryVisibilityScreen(
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    listOf(ContentType.LIVE, ContentType.MOVIE, ContentType.SERIES).forEachIndexed { index, type ->
-                        TvChip(
-                            label = "${type.visibilityTitle()} (${categoryLists[type].orEmpty().size})",
-                            selected = selectedType == type,
-                            onClick = { selectedType = type },
-                            modifier = Modifier.focusProperties {
-                                left = if (index == 0) hiddenOnlyFocus else typeFocusers[index - 1]
-                                right = if (index == typeFocusers.lastIndex) hiddenOnlyFocus else typeFocusers[index + 1]
-                                up = contentEntryFocus
-                                if (results.isNotEmpty()) down = firstResultFocus
-                            },
-                            focusRequester = typeFocusers[index],
-                        )
-                    }
+                    TvButton(
+                        label = "Catalog: ${selectedType.visibilityTitle()} (${categoryLists[selectedType].orEmpty().size})  ▾",
+                        onClick = { catalogMenuOpen = !catalogMenuOpen },
+                        modifier = Modifier.width(246.dp).focusProperties {
+                            up = contentEntryFocus
+                            down = if (catalogMenuOpen) catalogOptionFocusers.first() else hiddenOnlyFocus
+                        },
+                        style = TvButtonStyle.Secondary,
+                        focusRequester = catalogSelectorFocus,
+                    )
                     TvChip(
                         label = "Hidden only (${hiddenIds.size})",
                         selected = hiddenOnly,
                         onClick = { hiddenOnly = !hiddenOnly },
                         modifier = Modifier.focusProperties {
-                            left = typeFocusers.last()
-                            right = typeFocusers.first()
-                            up = contentEntryFocus
+                            up = if (catalogMenuOpen) catalogOptionFocusers.last() else catalogSelectorFocus
                             if (results.isNotEmpty()) down = firstResultFocus
                         },
                         focusRequester = hiddenOnlyFocus,
                     )
+                }
+                if (catalogMenuOpen) {
+                    Column(Modifier.width(246.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(ContentType.LIVE, ContentType.MOVIE, ContentType.SERIES).forEachIndexed { index, type ->
+                            TvButton(
+                                label = "${if (selectedType == type) "✓  " else ""}${type.visibilityTitle()} (${categoryLists[type].orEmpty().size})",
+                                onClick = {
+                                    selectedType = type
+                                    catalogMenuOpen = false
+                                    runCatching { catalogSelectorFocus.requestFocus() }
+                                },
+                                modifier = Modifier.fillMaxWidth().focusProperties {
+                                    up = if (index == 0) catalogSelectorFocus else catalogOptionFocusers[index - 1]
+                                    down = if (index == catalogOptionFocusers.lastIndex) hiddenOnlyFocus else catalogOptionFocusers[index + 1]
+                                },
+                                style = TvButtonStyle.Secondary,
+                                focusRequester = catalogOptionFocusers[index],
+                            )
+                        }
+                    }
                 }
                 Text(
                     "${results.size} matching ${if (results.size == 1) "category" else "categories"}",
@@ -144,7 +172,7 @@ fun CategoryVisibilityScreen(
                     modifier = if (category.id == results.first().id) {
                         Modifier
                             .focusRequester(firstResultFocus)
-                            .focusProperties { up = typeFocusers[ContentType.entries.indexOf(selectedType).coerceIn(0, 2)] }
+                            .focusProperties { up = hiddenOnlyFocus }
                     } else Modifier,
                 )
             }
