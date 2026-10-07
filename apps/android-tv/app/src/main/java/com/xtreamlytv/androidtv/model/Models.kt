@@ -3,14 +3,14 @@ package com.xtreamlytv.androidtv.model
 enum class ContentType { LIVE, MOVIE, SERIES, EPISODE }
 
 enum class AppTheme(val id: String, val label: String) {
+    BLUE("blue", "Blue"),
     TEAL("teal", "Teal"),
     GRAPHITE("graphite", "Graphite"),
     PURPLE("purple", "Purple"),
-    PINK("pink", "Pink"),
-    BLUE("blue", "Blue");
+    PINK("pink", "Pink");
 
     companion object {
-        fun fromId(value: String?): AppTheme = entries.firstOrNull { it.id == value } ?: TEAL
+        fun fromId(value: String?): AppTheme = entries.firstOrNull { it.id == value } ?: BLUE
     }
 }
 
@@ -25,9 +25,10 @@ enum class StreamFormat(val id: String, val label: String) {
 }
 
 data class AppSettings(
-    val theme: AppTheme = AppTheme.TEAL,
+    val theme: AppTheme = AppTheme.BLUE,
     val streamFormat: StreamFormat = StreamFormat.AUTO,
     val maxCachedCategories: Int = 3,
+    val favoriteAutoSort: Boolean = true,
 )
 
 data class Credentials(
@@ -46,7 +47,12 @@ data class CatalogItem(
     val type: ContentType,
     val name: String,
     val categoryId: String? = null,
+    /** Primary card/channel artwork. */
     val imageUrl: String? = null,
+    /** Poster/cover artwork when distinct from imageUrl. */
+    val coverUrl: String? = null,
+    /** 16:9 hero/fanart artwork. */
+    val backdropUrl: String? = null,
     val containerExtension: String? = null,
     val rating: Double? = null,
     val plot: String? = null,
@@ -55,9 +61,26 @@ data class CatalogItem(
     val channelNumber: String? = null,
     val genre: String? = null,
     val releaseDate: String? = null,
+    val runtimeMinutes: Int? = null,
+    val director: String? = null,
+    val cast: String? = null,
+    val country: String? = null,
+    val youtubeTrailer: String? = null,
+    val tmdbId: String? = null,
+    val resolution: String? = null,
+    val audioLayout: String? = null,
     val parentSeriesId: String? = null,
     val parentSeriesName: String? = null,
     val parentSeriesImageUrl: String? = null,
+    val parentSeriesBackdropUrl: String? = null,
+)
+
+data class EpgProgram(
+    val streamId: String,
+    val title: String,
+    val description: String? = null,
+    val startEpochMs: Long,
+    val endEpochMs: Long,
 )
 
 data class FavoriteGroup(

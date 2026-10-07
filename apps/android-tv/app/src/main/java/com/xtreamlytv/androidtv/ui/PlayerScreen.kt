@@ -1,5 +1,6 @@
 package com.xtreamlytv.androidtv.ui
 
+import android.view.KeyEvent as AndroidKeyEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -41,9 +42,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -65,17 +68,26 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
+    val subtitleOptionFocus = remember(request.item.id) { FocusRequester() }
+    val favoriteOptionFocus = remember(request.item.id) { FocusRequester() }
     var candidateIndex by remember(request.item.id) { mutableIntStateOf(0) }
     var controlsVisible by remember(request.item.id) { mutableStateOf(true) }
+    var optionsOpen by remember(request.item.id) { mutableStateOf(false) }
     var playing by remember(request.item.id) { mutableStateOf(true) }
     var position by remember(request.item.id) { mutableLongStateOf(request.startPositionMs) }
     var duration by remember(request.item.id) { mutableLongStateOf(0L) }
     var errorMessage by remember(request.item.id) { mutableStateOf<String?>(null) }
+    var subtitlesAvailable by remember(request.item.id) { mutableStateOf(false) }
+    var subtitlesEnabled by remember(request.item.id) { mutableStateOf(false) }
 
     val player = remember(request.item.id, candidateIndex) {
         ExoPlayer.Builder(context).build().apply {
             val candidate = request.urlCandidates.getOrElse(candidateIndex) { request.urlCandidates.first() }
             setMediaItem(MediaItem.fromUri(candidate))
+            trackSelectionParameters = trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled)
+                .build()
             if (request.startPositionMs > 0L && request.item.type != ContentType.LIVE) seekTo(request.startPositionMs)
             playWhenReady = true
             prepare()
@@ -93,6 +105,13 @@ fun PlayerScreen(
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) onEnded()
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                subtitlesAvailable = tracks.groups.any { group ->
+                    group.type == C.TRACK_TYPE_TEXT && group.isSupported
+                }
+                if (!subtitlesAvailable) subtitlesEnabled = false
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -124,10 +143,18 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(controlsVisible, playing) {
-        if (controlsVisible && playing) {
+    LaunchedEffect(controlsVisible, playing, optionsOpen) {
+        if (controlsVisible && playing && !optionsOpen) {
             delay(4000)
             controlsVisible = false
+        }
+    }
+
+    LaunchedEffect(optionsOpen, subtitlesAvailable) {
+        if (optionsOpen) {
+            delay(24L)
+            val target = if (subtitlesAvailable) subtitleOptionFocus else favoriteOptionFocus
+            runCatching { target.requestFocus() }
         }
     }
 
@@ -136,8 +163,24 @@ fun PlayerScreen(
         if (player.isPlaying) player.pause() else player.play()
         showControls()
     }
+    fun setSubtitles(enabled: Boolean) {
+        if (!subtitlesAvailable) return
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !enabled)
+            .build()
+        subtitlesEnabled = enabled
+        showControls()
+    }
+    fun closeOptions() {
+        optionsOpen = false
+        showControls()
+        runCatching { focusRequester.requestFocus() }
+    }
 
-    BackHandler { onBack() }
+    BackHandler {
+        if (optionsOpen) closeOptions() else onBack()
+    }
 
     Box(
         Modifier
@@ -146,14 +189,45 @@ fun PlayerScreen(
             .focusRequester(focusRequester)
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when (event.key) {
-                    Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> { togglePlayback(); true }
-                    Key.DirectionLeft -> { player.seekTo((player.currentPosition - 30_000L).coerceAtLeast(0L)); showControls(); true }
-                    Key.DirectionRight -> { player.seekTo(player.currentPosition + 30_000L); showControls(); true }
-                    Key.DirectionUp -> { onPrevious(); true }
-                    Key.DirectionDown -> { onNext(); true }
-                    Key.Menu -> { onToggleFavorite(); showControls(); true }
-                    Key.Back -> { onBack(); true }
+
+                if (optionsOpen) {
+                    return@onPreviewKeyEvent when {
+                        event.key == Key.Back || event.key == Key.Menu -> { closeOptions(); true }
+                        event.nativeKeyEvent.keyCode == AndroidKeyEvent.KEYCODE_CAPTIONS && subtitlesAvailable -> {
+                            setSubtitles(!subtitlesEnabled)
+                            true
+                        }
+                        else -> false
+                    }
+                }
+
+                when {
+                    event.nativeKeyEvent.keyCode == AndroidKeyEvent.KEYCODE_CAPTIONS && subtitlesAvailable -> {
+                        setSubtitles(!subtitlesEnabled)
+                        true
+                    }
+                    event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.MediaPlayPause -> {
+                        togglePlayback()
+                        true
+                    }
+                    event.key == Key.DirectionLeft -> {
+                        player.seekTo((player.currentPosition - 30_000L).coerceAtLeast(0L))
+                        showControls()
+                        true
+                    }
+                    event.key == Key.DirectionRight -> {
+                        player.seekTo(player.currentPosition + 30_000L)
+                        showControls()
+                        true
+                    }
+                    event.key == Key.DirectionUp -> { onPrevious(); true }
+                    event.key == Key.DirectionDown -> { onNext(); true }
+                    event.key == Key.Menu -> {
+                        optionsOpen = true
+                        controlsVisible = true
+                        true
+                    }
+                    event.key == Key.Back -> { onBack(); true }
                     else -> { showControls(); false }
                 }
             }
@@ -180,6 +254,24 @@ fun PlayerScreen(
                 playing = playing,
                 position = position,
                 duration = duration,
+                subtitlesAvailable = subtitlesAvailable,
+                subtitlesEnabled = subtitlesEnabled,
+            )
+        }
+
+        if (optionsOpen) {
+            PlaybackOptions(
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 34.dp, bottom = 112.dp),
+                favorite = favorite,
+                subtitlesAvailable = subtitlesAvailable,
+                subtitlesEnabled = subtitlesEnabled,
+                subtitleFocus = subtitleOptionFocus,
+                favoriteFocus = favoriteOptionFocus,
+                onToggleSubtitles = { setSubtitles(!subtitlesEnabled) },
+                onToggleFavorite = {
+                    onToggleFavorite()
+                    showControls()
+                },
             )
         }
 
@@ -197,6 +289,48 @@ fun PlayerScreen(
 }
 
 @Composable
+private fun PlaybackOptions(
+    modifier: Modifier = Modifier,
+    favorite: Boolean,
+    subtitlesAvailable: Boolean,
+    subtitlesEnabled: Boolean,
+    subtitleFocus: FocusRequester,
+    favoriteFocus: FocusRequester,
+    onToggleSubtitles: () -> Unit,
+    onToggleFavorite: () -> Unit,
+) {
+    val colors = palette()
+    Column(
+        modifier
+            .width(188.dp)
+            .background(Color(0xF2071014), RoundedCornerShape(14.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("Playback options", color = colors.text, fontSize = 11.sp)
+        TvButton(
+            label = if (subtitlesAvailable) {
+                "Subtitles: ${if (subtitlesEnabled) "On" else "Off"}"
+            } else {
+                "Subtitles unavailable"
+            },
+            onClick = onToggleSubtitles,
+            enabled = subtitlesAvailable,
+            modifier = Modifier.fillMaxWidth(),
+            style = TvButtonStyle.Secondary,
+            focusRequester = subtitleFocus,
+        )
+        TvButton(
+            label = if (favorite) "♥ Favorited" else "♡ Favorite",
+            onClick = onToggleFavorite,
+            modifier = Modifier.fillMaxWidth(),
+            style = TvButtonStyle.Secondary,
+            focusRequester = favoriteFocus,
+        )
+    }
+}
+
+@Composable
 private fun PlayerControls(
     modifier: Modifier = Modifier,
     request: PlayerRequest,
@@ -204,6 +338,8 @@ private fun PlayerControls(
     playing: Boolean,
     position: Long,
     duration: Long,
+    subtitlesAvailable: Boolean,
+    subtitlesEnabled: Boolean,
 ) {
     val colors = palette()
     Column(
@@ -214,7 +350,7 @@ private fun PlayerControls(
         verticalArrangement = Arrangement.spacedBy(9.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BrandLockup(iconSize = 28.dp, wordmarkSize = 14)
+            BrandLockup(iconSize = 30.dp, wordmarkSize = 16)
             Spacer(Modifier.width(18.dp))
             Column(Modifier.weight(1f)) {
                 Text(request.item.name, color = colors.text, fontSize = 15.sp, maxLines = 1)
@@ -242,7 +378,10 @@ private fun PlayerControls(
             Text("← 30s", color = colors.muted, fontSize = 9.sp)
             Text(if (playing) "OK Pause" else "OK Play", color = colors.text, fontSize = 10.sp)
             Text("30s →", color = colors.muted, fontSize = 9.sp)
-            Text("MENU ${if (favorite) "Unfavorite" else "Favorite"}", color = colors.muted, fontSize = 9.sp)
+            Text("MENU Options", color = colors.muted, fontSize = 9.sp)
+            if (subtitlesAvailable) {
+                Text("CC ${if (subtitlesEnabled) "On" else "Off"}", color = if (subtitlesEnabled) colors.accent else colors.muted, fontSize = 9.sp)
+            }
             if (request.item.type == ContentType.LIVE) {
                 Text("↑/↓ Change channel", color = colors.muted, fontSize = 9.sp)
             } else {

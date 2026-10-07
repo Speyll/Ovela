@@ -4,7 +4,7 @@
   var BACK = 461, PLAY = 415, PAUSE = 19, STOP = 413, RED = 403, GREEN = 404;
   var APP_NAME = 'XtreamlyTV';
   var APP_ID = 'com.github.xtreamlytv.webos';
-  var APP_VERSION = '0.6.0';
+  var APP_VERSION = '0.7.0';
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>'"]/g, function (char) {
@@ -219,7 +219,7 @@
     pendingFavoriteFirstFocus: false,
 
     init: function () {
-      this.applyTheme(this.state.settings.theme || 'teal');
+      this.applyTheme(this.state.settings.theme || 'blue');
       this.navigationStates = this.loadNavigationStates();
       this.scale();
       window.addEventListener('resize', this.scale.bind(this));
@@ -246,8 +246,9 @@
 
     applyTheme: function (theme, persist) {
       var allowed = ['teal', 'gray', 'purple', 'pink', 'blue'];
-      if (allowed.indexOf(theme) < 0) theme = 'teal';
+      if (allowed.indexOf(theme) < 0) theme = 'blue';
       document.body.setAttribute('data-theme', theme);
+      if (window.XtreamlyTVBrand && window.XtreamlyTVBrand.apply) window.XtreamlyTVBrand.apply(theme);
       if (persist) {
         XtreamlyTVStore.updateSettings({ theme: theme });
         this.state = XtreamlyTVStore.getState();
@@ -424,10 +425,10 @@
       this.renderShell(returnView, snapshot);
     },
 
-    renderLogin: function (error) {
+    renderLogin: function (error, credentialsOverride, settingsOverride) {
       this.destroyVirtualGrid();
-      var credentials = this.state.credentials || {};
-      var settings = this.state.settings || {};
+      var credentials = credentialsOverride || this.state.credentials || {};
+      var settings = Object.assign({}, this.state.settings || {}, settingsOverride || {});
       this.root.innerHTML = '<section class="screen login-screen">' +
         '<div class="login-brand"><div class="brand-lockup"><img class="brand-wordmark" src="assets/xtreamlytv-wordmark.svg" alt="XtreamlyTV"><span>Live · Movies · Series</span></div>' +
         '<p>A fast, remote-first Xtream player designed for large provider libraries and LG webOS televisions.</p>' +
@@ -450,7 +451,7 @@
         var form = new FormData(event.currentTarget);
         self.connect({
           server: form.get('server'), username: form.get('username'), password: form.get('password')
-        }, { apiProxy: form.get('apiProxy'), streamFormat: form.get('streamFormat'), theme: settings.theme || 'teal' });
+        }, { apiProxy: form.get('apiProxy'), streamFormat: form.get('streamFormat'), theme: settings.theme || 'blue' });
       });
       document.getElementById('demoButton').addEventListener('click', function () { self.startDemo(); });
       [['loginServer', 'loginUsername'], ['loginUsername', 'loginPassword']].forEach(function (pair) {
@@ -504,7 +505,7 @@
       if (!/^https?:\/\//i.test(credentials.server)) credentials.server = 'http://' + credentials.server;
       XtreamlyTVStore.updateSettings(settings || {});
       this.state = XtreamlyTVStore.getState();
-      this.applyTheme(this.state.settings.theme || 'teal');
+      this.applyTheme(this.state.settings.theme || 'blue');
       this.api = new XtreamlyTVApi(credentials, this.state.settings);
       this.renderLoading('Connecting and loading category indexes…');
       this.api.authenticate().then(function (profile) {
@@ -530,9 +531,15 @@
           setTimeout(function () { self.ensureSeriesDiscovery(true); }, 250);
         }
       }).catch(function (error) {
-        if (!silent) XtreamlyTVStore.clearCredentials();
+        /* A provider outage or authentication failure must never erase the
+           user's saved connection details. For manual attempts, re-render the
+           submitted values without persisting them until authentication succeeds. */
         self.state = XtreamlyTVStore.getState();
-        self.renderLogin(error.message || 'Unable to connect.');
+        self.renderLogin(
+          error.message || 'Unable to connect.',
+          silent ? null : credentials,
+          silent ? null : settings
+        );
       });
     },
 
@@ -1961,7 +1968,7 @@
       var settings = this.state.settings;
       var credentials = this.state.credentials || { server:'', username:'', password:'' };
       var themes = [
-        { id: 'teal', label: 'Teal' }, { id: 'gray', label: 'Graphite' }, { id: 'purple', label: 'Purple' }, { id: 'pink', label: 'Pink' }, { id: 'blue', label: 'Blue' }
+        { id: 'blue', label: 'Blue (default)' }, { id: 'teal', label: 'Teal' }, { id: 'gray', label: 'Graphite' }, { id: 'purple', label: 'Purple' }, { id: 'pink', label: 'Pink' }
       ];
       var maskedPassword = credentials.password ? '••••••••' : 'Not set';
       view.innerHTML = '<div class="scroll-view"><div class="settings-grid">' +
@@ -2012,7 +2019,7 @@
 
     refreshStateAndApi: function () {
       this.state = XtreamlyTVStore.getState();
-      this.applyTheme(this.state.settings.theme || 'teal');
+      this.applyTheme(this.state.settings.theme || 'blue');
       if (this.state.credentials) this.api = new XtreamlyTVApi(this.state.credentials, this.state.settings);
     },
 
@@ -2077,7 +2084,17 @@
       this.playerParent = parent || null;
       this.playbackCandidates = this.buildPlaybackCandidates(item, type);
       this.playbackCandidateIndex = 0;
-      this.playbackProgressRestored = false;
+      this.playbackProgressRestored = type === 'live';
+      this.playbackResumeTarget = null;
+      this.playbackResumeAttempts = 0;
+      this.playbackResumeTimer = null;
+      this.playbackResumeToastShown = false;
+      if (type !== 'live') {
+        var savedProgress = XtreamlyTVStore.getProgress(type, idOf(item, type));
+        var savedSeconds = savedProgress ? Number(savedProgress.seconds || 0) : 0;
+        if (isFinite(savedSeconds) && savedSeconds > 30) this.playbackResumeTarget = savedSeconds;
+        else this.playbackProgressRestored = true;
+      }
       this.playbackSwitching = false;
       this.playbackFailureLock = false;
       this.playerHasPlayed = false;
@@ -2148,10 +2165,21 @@
         self.restoreProgress(video);
         self.updatePlayerProgress(video);
       });
-      video.addEventListener('durationchange', function () { self.updatePlayerProgress(video); });
-      video.addEventListener('loadeddata', function () { self.onPlaybackReady(video); });
-      video.addEventListener('canplay', function () { self.onPlaybackReady(video); });
+      video.addEventListener('durationchange', function () {
+        self.restoreProgress(video);
+        self.updatePlayerProgress(video);
+      });
+      video.addEventListener('loadeddata', function () {
+        self.restoreProgress(video);
+        self.onPlaybackReady(video);
+      });
+      video.addEventListener('canplay', function () {
+        self.restoreProgress(video);
+        self.onPlaybackReady(video);
+      });
+      video.addEventListener('seeked', function () { self.confirmProgressRestore(video); });
       video.addEventListener('playing', function () {
+        self.restoreProgress(video);
         self.playerHasPlayed = true;
         self.onPlaybackReady(video);
         self.startPlaybackWatchdog(video);
@@ -2191,6 +2219,10 @@
         return;
       }
       clearTimeout(this.playbackWatchdog);
+      clearTimeout(this.playbackResumeTimer);
+      this.playbackResumeTimer = null;
+      this.playbackResumeAttempts = 0;
+      this.playbackProgressRestored = this.playerType === 'live' || !(Number(this.playbackResumeTarget || 0) > 30);
       this.clearPlayerBuffering(true);
       this.playbackCandidateIndex = index;
       this.playbackStartedAt = Date.now();
@@ -2301,17 +2333,71 @@
       this.showPlayerError('Unable to display this stream', reason + code + ' The channel may be offline or encoded with a video codec unsupported by this LG TV.');
     },
 
-    restoreProgress: function (video) {
-      if (this.playerType === 'live' || this.playbackProgressRestored) return;
+    confirmProgressRestore: function (video) {
+      if (this.playerType === 'live' || this.playbackProgressRestored || !video) return;
+      var target = Number(this.playbackResumeTarget || 0);
+      var current = isFinite(video.currentTime) ? Number(video.currentTime) : 0;
+      if (!(target > 30) || Math.abs(current - target) > 4) return;
+      clearTimeout(this.playbackResumeTimer);
+      this.playbackResumeTimer = null;
       this.playbackProgressRestored = true;
-      var progress = XtreamlyTVStore.getProgress(this.playerType, idOf(this.playerMedia, this.playerType));
-      if (progress && progress.seconds > 30 && (!video.duration || progress.seconds < video.duration - 30)) {
-        try { video.currentTime = progress.seconds; this.toast('Resumed from ' + formatSeconds(progress.seconds)); } catch (e) { /* ignore */ }
+      this.playbackResumeAttempts = 0;
+      if (!this.playbackResumeToastShown) {
+        this.playbackResumeToastShown = true;
+        this.toast('Resumed from ' + formatSeconds(target));
       }
+      this.updatePlayerProgress(video);
+    },
+
+    restoreProgress: function (video) {
+      var self = this;
+      if (this.playerType === 'live' || this.playbackProgressRestored || !video) return;
+
+      var target = Number(this.playbackResumeTarget || 0);
+      if (!(target > 30)) {
+        this.playbackProgressRestored = true;
+        return;
+      }
+
+      var duration = Number(video.duration);
+      if (isFinite(duration) && duration > 0 && target >= duration - 30) {
+        this.playbackProgressRestored = true;
+        this.playbackResumeTarget = null;
+        return;
+      }
+
+      var current = isFinite(video.currentTime) ? Number(video.currentTime) : 0;
+      if (Math.abs(current - target) <= 4) {
+        this.confirmProgressRestore(video);
+        return;
+      }
+
+      if (Number(video.readyState || 0) < 1) return;
+      if (this.playbackResumeAttempts >= 14) {
+        clearTimeout(this.playbackResumeTimer);
+        this.playbackResumeTimer = null;
+        this.playbackProgressRestored = true;
+        this.toast('Unable to restore the saved position. Playing from the beginning.');
+        return;
+      }
+
+      this.playbackResumeAttempts += 1;
+      try {
+        if (typeof video.fastSeek === 'function') video.fastSeek(target);
+        else video.currentTime = target;
+      } catch (error) { /* Older webOS builds may reject a seek until more data is buffered. */ }
+
+      clearTimeout(this.playbackResumeTimer);
+      this.playbackResumeTimer = setTimeout(function () {
+        if (!self.playerOpen || self.playerType === 'live' || self.playbackProgressRestored) return;
+        self.confirmProgressRestore(video);
+        if (!self.playbackProgressRestored) self.restoreProgress(video);
+      }, 180);
     },
 
     maybeSaveProgress: function (video) {
       if (this.playerType === 'live' || !video || !isFinite(video.currentTime)) return;
+      if (!this.playbackProgressRestored && Number(this.playbackResumeTarget || 0) > 30) return;
       if (Date.now() - this.lastProgressSave < 10000) return;
       this.lastProgressSave = Date.now();
       XtreamlyTVStore.saveProgress(this.playerType, idOf(this.playerMedia, this.playerType), video.currentTime, video.duration);
@@ -2457,10 +2543,15 @@
       clearTimeout(this.overlayTimer);
       clearTimeout(this.playbackWatchdog);
       clearTimeout(this.playbackBufferTimer);
+      clearTimeout(this.playbackResumeTimer);
       this.playbackBufferTimer = null;
+      this.playbackResumeTimer = null;
       var video = document.getElementById('video');
       if (video) {
-        if (this.playerType !== 'live' && isFinite(video.currentTime)) XtreamlyTVStore.saveProgress(this.playerType, idOf(this.playerMedia, this.playerType), video.currentTime, video.duration);
+        if (this.playerType !== 'live' && isFinite(video.currentTime) &&
+            (this.playbackProgressRestored || !(Number(this.playbackResumeTarget || 0) > 30))) {
+          XtreamlyTVStore.saveProgress(this.playerType, idOf(this.playerMedia, this.playerType), video.currentTime, video.duration);
+        }
         try { video.pause(); video.removeAttribute('src'); video.load(); } catch (error) { /* ignore */ }
       }
       var player = document.getElementById('player');

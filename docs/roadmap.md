@@ -26,13 +26,24 @@
 - Catch-up discovery and playback
 - Live DVR-window controls where providers support them
 
-## 0.7 — Profiles and safety
+## 0.7 — webOS living-room UI refresh
+
+- Fixed Home / Live TV / Movies / Series top navigation
+- Circular fixed-center category wheel
+- Five-row EPG with fast page scrolling and improved readability
+- Full-width Movies / Series poster rail and split artwork-backed hero
+- Catalog-scoped top-nav Search pop-out
+- Default alphabetical Favorites sorting
+- Provider credential retention across failed reconnects
+
+## 0.8 — Profiles and safety
 
 - Multiple providers
 - Hidden/reordered categories
 - PIN-protected categories
 - User profiles
 - Import/export settings without exporting plaintext passwords
+- Native Android TV parity for the v0.7 browsing model
 
 ## 1.0 — Stable television release
 

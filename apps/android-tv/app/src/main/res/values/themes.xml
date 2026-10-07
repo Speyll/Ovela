@@ -5,9 +5,9 @@
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowDisablePreview">false</item>
         <item name="android:windowBackground">@drawable/launch_background</item>
-        <item name="android:colorAccent">#20E7C4</item>
-        <item name="android:colorPrimary">#20E7C4</item>
-        <item name="android:navigationBarColor">#071014</item>
+        <item name="android:colorAccent">#54B8FF</item>
+        <item name="android:colorPrimary">#54B8FF</item>
+        <item name="android:navigationBarColor">#02050A</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowAllowReturnTransitionOverlap">true</item>
         <item name="android:windowAllowEnterTransitionOverlap">true</item>
@@ -18,8 +18,8 @@
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowDisablePreview">false</item>
         <item name="android:windowBackground">@drawable/launch_background</item>
-        <item name="windowSplashScreenBackground">#071014</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/xtreamlytv_mark_baseline</item>
+        <item name="windowSplashScreenBackground">#02050A</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_empty</item>
         <item name="postSplashScreenTheme">@style/Theme.XtreamlyTV</item>
     </style>
 </resources>

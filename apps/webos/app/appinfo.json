@@ -1,6 +1,6 @@
 {
   "id": "com.github.xtreamlytv.webos",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "vendor": "XtreamlyTV Contributors",
   "type": "web",
   "main": "index.html",

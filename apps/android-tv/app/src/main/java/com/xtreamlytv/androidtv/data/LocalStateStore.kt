@@ -28,6 +28,7 @@ class LocalStateStore(context: Context) {
                 theme = AppTheme.fromId(preferences.getString(KEY_THEME, null)),
                 streamFormat = StreamFormat.fromId(preferences.getString(KEY_STREAM_FORMAT, null)),
                 maxCachedCategories = preferences.getInt(KEY_CACHE_SIZE, DEFAULT_CACHE_SIZE).coerceIn(2, 5),
+                favoriteAutoSort = preferences.getBoolean(KEY_FAVORITE_AUTO_SORT, true),
             ),
             favorites = parseItems(preferences.getString(KEY_FAVORITES, null)).distinctBy(::itemKey).take(250),
             favoriteGroups = groups,
@@ -50,6 +51,7 @@ class LocalStateStore(context: Context) {
             .putString(KEY_THEME, settings.theme.id)
             .putString(KEY_STREAM_FORMAT, settings.streamFormat.id)
             .putInt(KEY_CACHE_SIZE, settings.maxCachedCategories.coerceIn(2, 5))
+            .putBoolean(KEY_FAVORITE_AUTO_SORT, settings.favoriteAutoSort)
             .apply()
     }
 
@@ -255,6 +257,8 @@ class LocalStateStore(context: Context) {
         .put("name", item.name)
         .putNullable("categoryId", item.categoryId)
         .putNullable("imageUrl", item.imageUrl)
+        .putNullable("coverUrl", item.coverUrl)
+        .putNullable("backdropUrl", item.backdropUrl)
         .putNullable("containerExtension", item.containerExtension)
         .putNullable("rating", item.rating)
         .putNullable("plot", item.plot)
@@ -263,9 +267,18 @@ class LocalStateStore(context: Context) {
         .putNullable("channelNumber", item.channelNumber)
         .putNullable("genre", item.genre)
         .putNullable("releaseDate", item.releaseDate)
+        .putNullable("runtimeMinutes", item.runtimeMinutes)
+        .putNullable("director", item.director)
+        .putNullable("cast", item.cast)
+        .putNullable("country", item.country)
+        .putNullable("youtubeTrailer", item.youtubeTrailer)
+        .putNullable("tmdbId", item.tmdbId)
+        .putNullable("resolution", item.resolution)
+        .putNullable("audioLayout", item.audioLayout)
         .putNullable("parentSeriesId", item.parentSeriesId)
         .putNullable("parentSeriesName", item.parentSeriesName)
         .putNullable("parentSeriesImageUrl", item.parentSeriesImageUrl)
+        .putNullable("parentSeriesBackdropUrl", item.parentSeriesBackdropUrl)
 
     private fun groupToJson(group: FavoriteGroup): JSONObject {
         val keys = JSONArray()
@@ -291,6 +304,8 @@ class LocalStateStore(context: Context) {
             name = name,
             categoryId = nullableString("categoryId"),
             imageUrl = nullableString("imageUrl"),
+            coverUrl = nullableString("coverUrl"),
+            backdropUrl = nullableString("backdropUrl"),
             containerExtension = nullableString("containerExtension"),
             rating = nullableDouble("rating"),
             plot = nullableString("plot"),
@@ -299,9 +314,18 @@ class LocalStateStore(context: Context) {
             channelNumber = nullableString("channelNumber"),
             genre = nullableString("genre"),
             releaseDate = nullableString("releaseDate"),
+            runtimeMinutes = nullableInt("runtimeMinutes"),
+            director = nullableString("director"),
+            cast = nullableString("cast"),
+            country = nullableString("country"),
+            youtubeTrailer = nullableString("youtubeTrailer"),
+            tmdbId = nullableString("tmdbId"),
+            resolution = nullableString("resolution"),
+            audioLayout = nullableString("audioLayout"),
             parentSeriesId = nullableString("parentSeriesId"),
             parentSeriesName = nullableString("parentSeriesName"),
             parentSeriesImageUrl = nullableString("parentSeriesImageUrl"),
+            parentSeriesBackdropUrl = nullableString("parentSeriesBackdropUrl"),
         )
     }
 
@@ -323,6 +347,7 @@ class LocalStateStore(context: Context) {
         const val KEY_THEME = "settings.theme"
         const val KEY_STREAM_FORMAT = "settings.streamFormat"
         const val KEY_CACHE_SIZE = "settings.maxCachedCategories"
+        const val KEY_FAVORITE_AUTO_SORT = "settings.favoriteAutoSort"
         const val KEY_FAVORITES = "favorites"
         const val KEY_GROUPS = "favoriteGroups"
         const val KEY_GROUP_ORDER = "favoriteGroupOrder"

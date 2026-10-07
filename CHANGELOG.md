@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.7.0 - 2026-08-23
+
+### webOS living-room UI refresh
+
+- Promoted the TV-tested v0.7 browsing shell to the production webOS release surface.
+- Added fixed Home / Live TV / Movies / Series navigation with a catalog-only Search action.
+- Added a circular fixed-center category wheel with deterministic remote and Magic Remote focus routing.
+- Rebuilt Live TV as a five-row EPG with larger guide typography, current-time tracking, and fast full-page D-pad scrolling.
+- Reworked Movies and Series around an immersive full-stage fanart treatment with horizontal/vertical fades and a six-column full-width poster rail.
+- Removed redundant poster-card title text and hard hero/card boundaries, added lightweight inline metadata, and introduced preloaded backdrop crossfades for snappier browsing.
+- Added webOS-keyboard-safe catalog search pop-out behavior.
+- Added default alphabetical Favorites sorting with an opt-out for manual ordering.
+- Preserved focus through favorite/unfavorite re-renders.
+- Stopped failed provider reconnects from clearing saved or currently-entered provider credentials.
+- Kept Android TV version-synchronized for the monorepo release while deferring native v0.7 UI parity.
+
 ## 0.6.0 - 2026-07-26
 
 ### Cross-platform TV overhaul

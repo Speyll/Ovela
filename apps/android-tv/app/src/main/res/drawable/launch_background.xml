@@ -2,15 +2,7 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="rectangle">
-            <gradient
-                android:angle="135"
-                android:endColor="#071014"
-                android:startColor="#0E5060" />
+            <solid android:color="#050B13" />
         </shape>
     </item>
-    <item
-        android:width="180dp"
-        android:height="180dp"
-        android:drawable="@drawable/xtreamlytv_mark_baseline"
-        android:gravity="center" />
 </layer-list>

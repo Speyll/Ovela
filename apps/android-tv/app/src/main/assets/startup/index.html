@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#02050a}
+body{font-family:Arial,Helvetica,sans-serif;-webkit-font-smoothing:antialiased}
+body[data-theme="blue"]{--bg:#07101d;--bg-2:#0a1930;--bg-3:#050b13;--accent:#54b8ff;--accent-rgb:84,184,255}
+body[data-theme="teal"]{--bg:#071014;--bg-2:#08171d;--bg-3:#061014;--accent:#42e8c5;--accent-rgb:66,232,197}
+body[data-theme="gray"]{--bg:#101113;--bg-2:#181a1e;--bg-3:#0b0c0e;--accent:#e5e7eb;--accent-rgb:229,231,235}
+body[data-theme="purple"]{--bg:#10091b;--bg-2:#1a0d2a;--bg-3:#0b0712;--accent:#b778ff;--accent-rgb:183,120,255}
+body[data-theme="pink"]{--bg:#170a13;--bg-2:#250d1c;--bg-3:#0e070c;--accent:#ff76ba;--accent-rgb:255,118,186}
+.xt-startup{position:fixed;left:0;top:0;width:1920px;height:1080px;margin:0;padding:0;overflow:hidden;background:#02050a;transform-origin:top left}
+.xt-startup-frame{display:block;position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;background:radial-gradient(circle at 50% 48%,rgba(var(--accent-rgb),.12),transparent 24%),radial-gradient(ellipse at 50% 112%,rgba(var(--accent-rgb),.10),transparent 42%),linear-gradient(180deg,#02050a 0%,var(--bg-3) 58%,#02050a 100%)}
+.xt-startup-frame::before{content:'';position:absolute;top:-12%;bottom:-12%;left:-28%;width:28%;background:linear-gradient(90deg,transparent,rgba(var(--accent-rgb),.025) 24%,rgba(var(--accent-rgb),.28) 50%,rgba(255,255,255,.12) 54%,rgba(var(--accent-rgb),.04) 68%,transparent);transform:skewX(-12deg);animation:xt27-sweep 1.12s cubic-bezier(.22,.72,.17,1) .30s both}
+.xt-startup-frame::after{content:'';position:absolute;inset:0;opacity:.20;background:repeating-linear-gradient(180deg,rgba(255,255,255,.010) 0,rgba(255,255,255,.010) 1px,transparent 1px,transparent 5px);pointer-events:none}
+.xt-startup-lockup{position:absolute;z-index:2;left:600px;top:435px;width:720px;height:210px;margin:0;transform-origin:360px 105px;opacity:0;transform:scale(.84);animation:xt27-lockup 1.35s cubic-bezier(.16,.78,.18,1) .16s both}
+.xt-startup-wordmark{display:block;position:absolute;left:20px;top:24px;width:680px;height:163px;margin:0;object-fit:contain;filter:drop-shadow(0 0 0 rgba(var(--accent-rgb),0));animation:xt27-logo-glow 1.55s ease-out .18s both}
+.xt-startup-flare{position:absolute;left:360px;top:105px;width:34px;height:34px;border-radius:50%;border:2px solid rgba(var(--accent-rgb),.72);opacity:0;transform:translate(-50%,-50%) scale(.2);animation:xt27-pulse 1.05s ease-out .60s both}
+.xt-startup-status{position:absolute;left:710px;top:666px;width:500px;margin:0;text-align:center;white-space:nowrap;color:rgba(235,245,255,.43);font-size:14px;line-height:1;font-weight:800;letter-spacing:5px;text-transform:uppercase;opacity:0;animation:xt27-status .62s ease-out 1.18s forwards}
+.xt-startup-status i{display:inline-block;width:5px;height:5px;margin:0 13px 2px;border-radius:50%;background:var(--accent);box-shadow:0 0 13px rgba(var(--accent-rgb),.80)}
+@keyframes xt27-lockup{0%{opacity:0;transform:scale(.84)}35%{opacity:1}72%{transform:scale(1.035)}100%{opacity:1;transform:scale(1)}}
+@keyframes xt27-logo-glow{0%{filter:drop-shadow(0 0 0 rgba(var(--accent-rgb),0))}58%{filter:drop-shadow(0 0 28px rgba(var(--accent-rgb),.55))}100%{filter:drop-shadow(0 0 14px rgba(var(--accent-rgb),.25))}}
+@keyframes xt27-sweep{0%{left:-30%;opacity:0}12%{opacity:1}100%{left:116%;opacity:0}}
+@keyframes xt27-pulse{0%{opacity:0;transform:translate(-50%,-50%) scale(.2)}20%{opacity:.76}100%{opacity:0;transform:translate(-50%,-50%) scale(16)}}
+@keyframes xt27-status{from{opacity:0}to{opacity:1}}
+</style>
+</head>
+<body data-theme="blue">
+<div id="startupSplash" class="xt-startup">
+  <div class="xt-startup-frame">
+    <div class="xt-startup-lockup">
+      <img id="xtStartupWordmark" class="xt-startup-wordmark" src="../branding/xtreamlytv-wordmark-blue.svg" alt="XtreamlyTV">
+      <span class="xt-startup-flare"></span>
+    </div>
+    <div class="xt-startup-status">Live<i></i>Movies<i></i>Series</div>
+  </div>
+</div>
+<script>
+(function(){
+  var params=new URLSearchParams(location.search);
+  var theme=params.get('theme')||'blue';
+  if(['blue','teal','gray','purple','pink'].indexOf(theme)<0) theme='blue';
+  document.body.setAttribute('data-theme',theme);
+  document.getElementById('xtStartupWordmark').src='../branding/xtreamlytv-wordmark-'+theme+'.svg';
+  function scale(){
+    var splash=document.getElementById('startupSplash');
+    var s=Math.min(innerWidth/1920,innerHeight/1080); if(!isFinite(s)||s<=0)s=1;
+    var l=Math.max(0,(innerWidth-1920*s)/2),t=Math.max(0,(innerHeight-1080*s)/2);
+    splash.style.left=l+'px'; splash.style.top=t+'px'; splash.style.transform=Math.abs(s-1)<.001?'none':'scale('+s+')';
+  }
+  scale(); addEventListener('resize',scale);
+})();
+</script>
+</body>
+</html>

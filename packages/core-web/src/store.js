@@ -11,7 +11,8 @@
       apiProxy: '',
       streamFormat: 'auto',
       autoplay: true,
-      theme: 'teal',
+      theme: 'blue',
+      favoriteAutoSort: true,
       maxCachedCategories: 3
     },
     favorites: [],

@@ -1,0 +1,90 @@
+﻿Captured: 2026-10-06T07:26:39.5437773-04:00
+Branch: release/v0.7.0
+Commit: 888d38b01c4718e615d20b04df619ce419fcc324
+
+Working-tree status:
+ M CHANGELOG.md
+ M README.md
+ M VERSION
+ M apps/android-tv/app/build.gradle.kts
+ M apps/android-tv/app/src/main/AndroidManifest.xml
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/MainActivity.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/data/LocalStateStore.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/data/XtreamClient.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/model/Models.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/ui/AppViewModel.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/ui/CatalogScreen.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/ui/DetailScreen.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/ui/FavoritesScreen.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/ui/HomeScreen.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/ui/PlayerScreen.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/ui/SettingsScreen.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/ui/StableFavoritesScreen.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/ui/TvComponents.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/ui/TvLayoutSupport.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/ui/XtreamlyTvApp.kt
+ M apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/ui/theme/TvTheme.kt
+ M apps/android-tv/app/src/main/res/drawable/ic_settings.xml
+ M apps/android-tv/app/src/main/res/drawable/launch_background.xml
+ M apps/android-tv/app/src/main/res/values-v31/themes.xml
+ M apps/android-tv/app/src/main/res/values/themes.xml
+ M apps/webos/app/appinfo.json
+ M apps/webos/app/assets/splash.png
+ M apps/webos/app/css/app.css
+ M apps/webos/app/index.html
+ M apps/webos/app/js/app.js
+ M apps/webos/app/js/store.js
+ M docs/roadmap.md
+ M package-lock.json
+ M package.json
+ M packages/core-web/package.json
+ M packages/core-web/src/store.js
+ M packages/core-web/test/store.test.mjs
+ M scripts/check-webos.mjs
+?? .xtreamly-backups/
+?? apps/android-tv/app/src/main/assets/
+?? apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/data/MediaCacheStore.kt
+?? apps/android-tv/app/src/main/res/drawable-nodpi/home_live_backdrop.jpg
+?? apps/android-tv/app/src/main/res/drawable-nodpi/xtreamlytv_background_blue.png
+?? apps/android-tv/app/src/main/res/drawable-nodpi/xtreamlytv_background_gray.png
+?? apps/android-tv/app/src/main/res/drawable-nodpi/xtreamlytv_background_pink.png
+?? apps/android-tv/app/src/main/res/drawable-nodpi/xtreamlytv_background_purple.png
+?? apps/android-tv/app/src/main/res/drawable-nodpi/xtreamlytv_background_teal.png
+?? apps/android-tv/app/src/main/res/drawable-nodpi/xtreamlytv_wordmark_blue.png
+?? apps/android-tv/app/src/main/res/drawable-nodpi/xtreamlytv_wordmark_graphite.png
+?? apps/android-tv/app/src/main/res/drawable-nodpi/xtreamlytv_wordmark_pink.png
+?? apps/android-tv/app/src/main/res/drawable-nodpi/xtreamlytv_wordmark_purple.png
+?? apps/android-tv/app/src/main/res/drawable-nodpi/xtreamlytv_wordmark_teal.png
+?? apps/android-tv/app/src/main/res/drawable/ic_splash_empty.xml
+?? apps/android-tv/app/src/main/res/font/
+?? apps/android-tv/app/src/main/res/raw/
+?? apps/webos/app/assets/fonts/
+?? apps/webos/app/assets/home-live-backdrop.jpg
+?? apps/webos/app/assets/startup-chime.mp3
+?? apps/webos/app/assets/xtreamlytv-wordmark-blue.svg
+?? apps/webos/app/assets/xtreamlytv-wordmark-gray.svg
+?? apps/webos/app/assets/xtreamlytv-wordmark-pink.svg
+?? apps/webos/app/assets/xtreamlytv-wordmark-purple.svg
+?? apps/webos/app/assets/xtreamlytv-wordmark-teal.svg
+?? apps/webos/app/css/startup.css
+?? apps/webos/app/css/v0.7-ui.css
+?? apps/webos/app/js/startup.js
+?? apps/webos/app/js/v0.7-ui.js
+?? docs/design/
+?? docs/release-notes/0.7.0.md
+?? get_series.json
+?? series.json
+?? third_party/
+?? vod-info.json
+
+Recent commits:
+888d38b Release v0.6.0
+5d86744 Fix webOS smoke test for v0.5.1
+cab0ae5 Release v0.5.1 Android TV parity and polish
+6b03d03 commit mistake
+70b5067 Fix Android Kotlin compilation for v0.4.1
+7931456 added by mistake
+03c8fb8 Fix v0.4.1 Android toolchain and CI
+9901d55 Align AGP and Gradle with Kotlin 2.3
+6a62788 Pin Android lifecycle dependencies for API 36
+a0f2b6a Fix Android Gradle wrapper and Kotlin compiler options

@@ -8,18 +8,18 @@ XtreamlyTV is an open-source, remote-first IPTV client for living-room televisio
 
 | Platform | Status | Package | Playback |
 |---|---|---|---|
-| LG webOS TV | Beta; daily-driver testing | `.ipk` | Native webOS HTML media surface |
-| Android TV / Google TV | 0.6 synchronized Favorites candidate; device validation required | `.apk` | AndroidX Media3 ExoPlayer |
+| LG webOS TV | **0.7.0** webOS-first beta | `.ipk` | Native webOS HTML media surface |
+| Android TV / Google TV | **0.7.0 version sync; v0.6 UI baseline** | `.apk` | AndroidX Media3 ExoPlayer |
 | Local browser demo | Development only | Static files | Browser media support |
 
-The Android TV target is a native Kotlin/Compose implementation of the same XtreamlyTV product experience established on webOS. Version 0.6 establishes one shared TV experience across both platforms, including explicit Favorites managers, group visibility and appearance controls, exact return-focus restoration, type-specific watch-history rails, and immediate branded startup while retaining platform-native playback and UI.
+Version 0.7.0 is a webOS-first living-room UI refresh with a circular category wheel, guide-first Live TV, full-width Movies/Series rails, catalog-scoped Search, and improved Favorites/provider resilience. Android TV remains a native Kotlin/Compose implementation and is version-synchronized for the monorepo release while its v0.7 UI parity pass is deferred.
 
 ## Features
 
 - Xtream provider authentication
 - Category-scoped Live TV, VOD, and Series browsing
-- Virtualized large-catalog navigation
-- Unified favorite groups, custom collections, long-press ordering, and recently watched favorites
+- Bounded large-catalog navigation with circular categories, five-row EPG, and six-card media rails
+- Favorites virtual categories, custom collections, default A-Z sorting, and editable group management
 - Movie and episode resume positions on webOS and Android TV
 - Live HLS/MPEG-TS fallback on both TV platforms
 - Native Media3 playback on Android TV
@@ -76,7 +76,7 @@ npm run build:webos
 Output:
 
 ```text
-dist/webos/com.github.xtreamlytv.webos_0.6.0_all.ipk
+dist/webos/com.github.xtreamlytv.webos_0.7.0_all.ipk
 ```
 
 ### Build Android TV
@@ -109,6 +109,7 @@ apps/android-tv/app/build/outputs/apk/debug/app-debug.apk
 - [Release process](docs/releasing.md)
 - [Roadmap](docs/roadmap.md)
 - [Brand assets](docs/brand.md)
+- [0.7.0 release notes](docs/release-notes/0.7.0.md)
 - [0.6.0 release notes](docs/release-notes/0.6.0.md)
 - [0.5.1 release notes](docs/release-notes/0.5.1.md)
 - [0.5.0 release notes](docs/release-notes/0.5.0.md)

@@ -79,7 +79,7 @@ fun StableFavoritesScreen(
                     color = palette().text,
                     fontSize = 24.sp,
                     lineHeight = 26.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                 )
                 Text(
                     text = "Your favorite content, organized your way.",
@@ -179,9 +179,13 @@ private fun StableFavoriteGrid(
     LaunchedEffect(focusRequest, targetIndex) {
         if (focusRequest != null && targetIndex in group.items.indices) {
             gridState.scrollToItem(gridRowStart(targetIndex, columns))
-            delay(48L)
-            runCatching { focusRequester.requestFocus() }
-            viewModel.consumeFocusRequest(scope)
+            repeat(5) { attempt ->
+                delay(if (attempt == 0) 48L else 24L)
+                if (runCatching { focusRequester.requestFocus() }.getOrDefault(false)) {
+                    viewModel.consumeFocusRequest(scope)
+                    return@LaunchedEffect
+                }
+            }
         }
     }
     LaunchedEffect(focusedIndex) {
@@ -250,7 +254,7 @@ fun StableFavoriteGroupsManagerScreen(state: AppUiState, viewModel: AppViewModel
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Edit Favorite Groups", color = palette().text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("Edit Favorite Groups", color = palette().text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     "Reorder, customize, hide, or show any group.",
                     color = palette().muted,
@@ -297,7 +301,7 @@ private fun StableFavoriteItemsManager(
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Reorder ${current.name}", color = palette().text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("Reorder ${current.name}", color = palette().text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 Text("Use Move up and Move down. Changes are saved immediately.", color = palette().muted, fontSize = 10.sp)
             }
             StableActionButton("Back", onBack, Modifier.width(78.dp))
@@ -365,7 +369,7 @@ private fun StableManagerGroupRow(
                     group.name,
                     color = palette().text,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -408,11 +412,11 @@ private fun StableManagerItemRow(
             .padding(horizontal = 12.dp),
     ) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            Text(position.toString(), color = palette().accent, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(30.dp))
+            Text(position.toString(), color = palette().accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(30.dp))
             StableArtwork(item, Modifier.width(48.dp).height(46.dp))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(item.name, color = palette().text, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(item.name, color = palette().text, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(item.type.stableLabel(), color = palette().muted, fontSize = 8.sp)
             }
             StableActionButton("Move up", onMoveUp, Modifier.width(82.dp), enabled = canMoveUp)
@@ -440,7 +444,7 @@ private fun StableGroupCard(
             StableGroupGlyph(group, Modifier.size(44.dp))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(group.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(group.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(3.dp))
                 Text("${group.items.size} ${if (group.items.size == 1) "item" else "items"}", color = Color.White.copy(alpha = 0.76f), fontSize = 9.sp)
             }
@@ -475,7 +479,7 @@ private fun StableFavoriteItemCard(
             StableArtwork(item, Modifier.width(58.dp).fillMaxHeight())
             Spacer(Modifier.width(9.dp))
             Column(Modifier.weight(1f)) {
-                Text(item.name, color = palette().text, fontSize = 11.sp, lineHeight = 13.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(item.name, color = palette().text, fontSize = 11.sp, lineHeight = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(3.dp))
                 Text(item.type.stableLabel(), color = palette().muted, fontSize = 8.sp)
             }
@@ -489,7 +493,7 @@ private fun StableArtwork(item: CatalogItem, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(8.dp)
     if (item.imageUrl.isNullOrBlank()) {
         Box(modifier = modifier.background(Color.White.copy(alpha = 0.08f), shape), contentAlignment = Alignment.Center) {
-            Text(item.name.take(1).uppercase(), color = palette().muted, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(item.name.take(1).uppercase(), color = palette().muted, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         }
     } else {
         AsyncImage(
@@ -516,7 +520,7 @@ private fun StableActionButton(
         radius = 10.dp,
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(label, color = if (enabled) palette().text else palette().muted.copy(alpha = 0.55f), fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(label, color = if (enabled) palette().text else palette().muted.copy(alpha = 0.55f), fontSize = 9.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }
@@ -524,7 +528,7 @@ private fun StableActionButton(
 @Composable
 private fun StableSectionHeader(label: String, count: Int, modifier: Modifier = Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = palette().text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(label, color = palette().text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Text("$count ${if (count == 1) "item" else "items"}", color = palette().muted, fontSize = 9.sp)
     }
 }
@@ -535,7 +539,7 @@ private fun StableEmptyFavorites(hasFavorites: Boolean, modifier: Modifier = Mod
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("♡", color = palette().accent, fontSize = 38.sp)
             Spacer(Modifier.height(6.dp))
-            Text(if (hasFavorites) "No items in this group" else "No favorites yet", color = palette().text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(if (hasFavorites) "No items in this group" else "No favorites yet", color = palette().text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 if (hasFavorites) "Open Edit groups to add favorites or choose another group."
                 else "Focus a channel, movie, or series and add it to Favorites.",
@@ -552,7 +556,7 @@ private fun StableAllGroupsHidden(onManage: () -> Unit, modifier: Modifier = Mod
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             TvIcon("heart", palette().accent, Modifier.size(36.dp))
             Spacer(Modifier.height(8.dp))
-            Text("All groups are hidden", color = palette().text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text("All groups are hidden", color = palette().text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Text("Open Edit groups to show the collections you want on this screen.", color = palette().muted, fontSize = 10.sp)
             Spacer(Modifier.height(12.dp))
             StableActionButton("Edit groups", onManage, Modifier.width(116.dp))

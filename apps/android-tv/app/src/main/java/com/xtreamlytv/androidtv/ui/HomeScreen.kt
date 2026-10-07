@@ -1,7 +1,5 @@
 package com.xtreamlytv.androidtv.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,50 +16,72 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.xtreamlytv.androidtv.R
 import com.xtreamlytv.androidtv.data.itemKey
 import com.xtreamlytv.androidtv.model.CatalogItem
 import com.xtreamlytv.androidtv.model.ContentType
 import com.xtreamlytv.androidtv.ui.theme.palette
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+private const val HOME_HERO_FOCUS_SCOPE = "home:hero"
 
 @Composable
-fun HomeScreen(state: AppUiState, viewModel: AppViewModel) {
+fun HomeScreen(
+    state: AppUiState,
+    viewModel: AppViewModel,
+    contentEntryFocus: FocusRequester,
+) {
     val recent = state.recent.distinctBy(::itemKey)
-    val featured = recent.firstOrNull()
-    val livePreview = recent.filter { it.type == ContentType.LIVE }.take(8)
-    val moviePreview = recent.filter { it.type == ContentType.MOVIE }.take(8)
+    val rawFeatured = recent.firstOrNull()
+    val featured = rawFeatured?.let { raw ->
+        val rich = state.richItems[itemKey(raw)] ?: raw
+        if (rich.type == ContentType.EPISODE && !rich.parentSeriesId.isNullOrBlank() && !rich.parentSeriesName.isNullOrBlank()) {
+            CatalogItem(
+                id = rich.parentSeriesId,
+                type = ContentType.SERIES,
+                name = rich.parentSeriesName,
+                imageUrl = rich.parentSeriesImageUrl ?: rich.imageUrl,
+                coverUrl = rich.parentSeriesImageUrl ?: rich.coverUrl ?: rich.imageUrl,
+                backdropUrl = rich.parentSeriesBackdropUrl,
+                plot = rich.plot,
+            )
+        } else rich
+    }
+    val livePreview = recent.filter { it.type == ContentType.LIVE }.take(12)
+    val moviePreview = recent.filter { it.type == ContentType.MOVIE }.take(12)
     val seriesPreview = recent
         .map { item ->
-            if (
-                item.type == ContentType.EPISODE &&
-                !item.parentSeriesId.isNullOrBlank() &&
-                !item.parentSeriesName.isNullOrBlank()
-            ) {
+            if (item.type == ContentType.EPISODE && !item.parentSeriesId.isNullOrBlank() && !item.parentSeriesName.isNullOrBlank()) {
                 CatalogItem(
                     id = item.parentSeriesId,
                     type = ContentType.SERIES,
                     name = item.parentSeriesName,
                     imageUrl = item.parentSeriesImageUrl ?: item.imageUrl,
+                    coverUrl = item.parentSeriesImageUrl ?: item.coverUrl ?: item.imageUrl,
+                    backdropUrl = item.parentSeriesBackdropUrl,
                 )
             } else item
         }
         .filter { it.type == ContentType.SERIES }
         .distinctBy(::itemKey)
-        .take(8)
+        .take(12)
 
     val rails = remember(livePreview, moviePreview, seriesPreview) {
         buildList {
@@ -70,67 +90,77 @@ fun HomeScreen(state: AppUiState, viewModel: AppViewModel) {
             if (seriesPreview.isNotEmpty()) add(HomeRailSpec(ContentType.SERIES, "Continue watching Series", seriesPreview))
         }
     }
-    val listState = rememberLazyListState()
-    val focusRequest = state.focusRequest?.takeIf { it.scope.startsWith("home:") }
-    val restoreFocusOnEntry = remember { focusRequest != null }
-    val heroPrimaryFocus = remember { FocusRequester() }
-    val firstShortcutFocus = remember { FocusRequester() }
+    val scrollState = rememberLazyListState()
+    val scrollScope = rememberCoroutineScope()
+    var lastFocusedRailIndex by remember { mutableStateOf(-1) }
+    val heroPlayFocus = contentEntryFocus
+    val firstRailFocus = remember(rails.firstOrNull()?.scope) { FocusRequester() }
+    var paintedHeroBackdrop by remember(rawFeatured?.id) { mutableStateOf(featured?.backdropUrl) }
 
-    LaunchedEffect(focusRequest, rails) {
-        val railIndex = rails.indexOfFirst { it.scope == focusRequest?.scope }
-        if (railIndex >= 0) listState.scrollToItem(railIndex + 2)
+    LaunchedEffect(rawFeatured?.id) {
+        if (rawFeatured?.type == ContentType.MOVIE) viewModel.requestMovieDetails(rawFeatured)
+    }
+    LaunchedEffect(featured?.backdropUrl) {
+        if (!featured?.backdropUrl.isNullOrBlank()) paintedHeroBackdrop = featured?.backdropUrl
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 2.dp, end = 10.dp, top = 3.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        item {
-            HomeHero(
-                featured = featured,
-                viewModel = viewModel,
-                requestDefaultFocus = !restoreFocusOnEntry,
-                primaryFocus = heroPrimaryFocus,
-                downFocus = firstShortcutFocus,
-            )
+    val returnFocus = state.focusRequest
+    LaunchedEffect(returnFocus?.scope, rails.map { it.scope }) {
+        val railIndex = rails.indexOfFirst { it.scope == returnFocus?.scope }
+        if (railIndex >= 0) {
+            scrollState.scrollToItem(railIndex)
+            delay(24L)
         }
-        item {
-            SectionHeader("Browse your provider")
-            Spacer(Modifier.height(9.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ProviderShortcut(
-                    type = ContentType.LIVE,
-                    count = state.categories[ContentType.LIVE].orEmpty().size,
-                    catalogsLoading = state.catalogsLoading,
-                    modifier = Modifier.weight(1f),
-                    focusRequester = firstShortcutFocus,
-                    upFocus = heroPrimaryFocus,
-                ) { viewModel.openCatalog(ContentType.LIVE) }
-                ProviderShortcut(
-                    type = ContentType.MOVIE,
-                    count = state.categories[ContentType.MOVIE].orEmpty().size,
-                    catalogsLoading = state.catalogsLoading,
-                    modifier = Modifier.weight(1f),
-                    upFocus = heroPrimaryFocus,
-                ) { viewModel.openCatalog(ContentType.MOVIE) }
-                ProviderShortcut(
-                    type = ContentType.SERIES,
-                    count = state.categories[ContentType.SERIES].orEmpty().size,
-                    catalogsLoading = state.catalogsLoading,
-                    modifier = Modifier.weight(1f),
-                    upFocus = heroPrimaryFocus,
-                ) { viewModel.openCatalog(ContentType.SERIES) }
+    }
+    LaunchedEffect(returnFocus, featured?.id) {
+        if (returnFocus?.scope == HOME_HERO_FOCUS_SCOPE) {
+            repeat(5) { attempt ->
+                delay(if (attempt == 0) 32L else 24L)
+                if (runCatching { heroPlayFocus.requestFocus() }.getOrDefault(false)) {
+                    viewModel.consumeFocusRequest(HOME_HERO_FOCUS_SCOPE)
+                    return@LaunchedEffect
+                }
             }
         }
-        itemsIndexed(rails, key = { _, rail -> rail.scope }) { _, rail ->
-            ContentRail(
-                spec = rail,
-                state = state,
-                focusRequest = focusRequest?.takeIf { it.scope == rail.scope },
-                viewModel = viewModel,
-            )
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        HomeHero(
+            featured = featured,
+            actionItem = rawFeatured,
+            // Never upscale poster/cover art into a backdrop. Live TV always uses
+            // the exact bundled TV-wall image from the webOS RC; Movie/Series use
+            // only provider backdrop artwork and otherwise fall through to the app background.
+            backdropUrl = if (featured?.type == ContentType.LIVE) null else paintedHeroBackdrop ?: featured?.backdropUrl,
+            viewModel = viewModel,
+            primaryFocus = heroPlayFocus,
+            downFocus = firstRailFocus.takeIf { rails.isNotEmpty() },
+        )
+        Spacer(Modifier.height(4.dp))
+        LazyColumn(
+            state = scrollState,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 64.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            itemsIndexed(rails, key = { _, rail -> rail.scope }) { rowIndex, rail ->
+                HomeContentRail(
+                    spec = rail,
+                    state = state,
+                    viewModel = viewModel,
+                    firstItemFocus = firstRailFocus.takeIf { rowIndex == 0 },
+                    focusRequest = returnFocus?.takeIf { it.scope == rail.scope },
+                    onRowFocused = {
+                        // The hero remains fixed. Only move the lower list when focus
+                        // enters a different rail; horizontal poster movement must not
+                        // repeatedly re-scroll the page and make it jump vertically.
+                        if (rowIndex >= 0 && rowIndex != lastFocusedRailIndex) {
+                            lastFocusedRailIndex = rowIndex
+                            scrollScope.launch { scrollState.animateScrollToItem(rowIndex) }
+                        }
+                    },
+                )
+            }
         }
     }
 }
@@ -146,184 +176,184 @@ private data class HomeRailSpec(
 @Composable
 private fun HomeHero(
     featured: CatalogItem?,
+    actionItem: CatalogItem?,
+    backdropUrl: String?,
     viewModel: AppViewModel,
-    requestDefaultFocus: Boolean,
     primaryFocus: FocusRequester,
-    downFocus: FocusRequester,
+    downFocus: FocusRequester?,
 ) {
     val colors = palette()
-
-    LaunchedEffect(featured?.id, requestDefaultFocus) {
-        if (requestDefaultFocus) runCatching { primaryFocus.requestFocus() }
+    val isLive = featured?.type == ContentType.LIVE
+    val poster = featured?.coverUrl ?: featured?.imageUrl
+    val title = featured?.name ?: "Your TV, movies, and series in one place"
+    val description = featured?.plot ?: if (featured != null) {
+        if (isLive) "Resume your last live channel or jump back into your recent viewing." else "Jump back in where you left off."
+    } else {
+        "Browse Live TV, movies, and series from your connected provider."
     }
 
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(158.dp)
-            .background(
-                Brush.horizontalGradient(
-                    listOf(colors.panelStrong, colors.accent.copy(alpha = 0.20f), colors.panel.copy(alpha = 0.88f)),
-                ),
-                RoundedCornerShape(18.dp),
-            )
-            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(18.dp)),
-    ) {
-        Box(
-            Modifier
-                .align(Alignment.CenterEnd)
-                .fillMaxSize(0.62f)
-                .background(Brush.radialGradient(listOf(colors.accent.copy(alpha = 0.30f), Color.Transparent))),
+    Box(Modifier.fillMaxWidth().height(194.dp)) {
+        HeroBackdrop(
+            url = if (isLive) null else backdropUrl,
+            fallbackDrawable = if (isLive) R.drawable.home_live_backdrop else null,
+            modifier = Modifier.fillMaxSize(),
+            imageAlpha = if (isLive) .42f else .46f,
+            aggressiveBottomVignette = true,
         )
-        Column(Modifier.fillMaxSize().padding(horizontal = 26.dp, vertical = 20.dp)) {
-            Text(
-                featured?.name ?: "Live TV, movies, and series without the lag",
-                color = colors.text,
-                fontSize = 24.sp,
-                lineHeight = 27.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-            )
-            Spacer(Modifier.height(7.dp))
-            Text(
-                if (featured != null) "Jump back into recently watched content or browse Live TV."
-                else "Browse Live TV, movies, and series from your provider.",
-                color = colors.muted,
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
-                modifier = Modifier.fillMaxWidth(0.60f),
-                maxLines = 2,
-            )
-            Spacer(Modifier.weight(1f))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            Modifier.fillMaxSize().padding(start = 16.dp, end = 22.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (featured != null) {
+                Box(Modifier.width(if (isLive) 82.dp else 92.dp).height(if (isLive) 92.dp else 138.dp), contentAlignment = Alignment.Center) {
+                    if (isLive) Artwork(featured, Modifier.size(80.dp), live = true, transparentLive = true)
+                    else Artwork(featured.copy(imageUrl = poster), Modifier.fillMaxSize(), live = false)
+                }
+                Spacer(Modifier.width(16.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text("LAST PLAYED", color = colors.accent, fontSize = 8.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.1.sp)
+                Spacer(Modifier.height(3.dp))
+                Text(title, color = colors.text, fontSize = 20.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(5.dp))
+                HeroMetadata(featured)
+                Spacer(Modifier.height(5.dp))
+                Text(description, color = colors.text.copy(alpha = .82f), fontSize = 9.sp, lineHeight = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(.68f))
+                Spacer(Modifier.height(8.dp))
                 if (featured != null) {
                     TvButton(
-                        label = if (featured.type == ContentType.LIVE) "Watch now" else "Open details",
+                        label = when (featured.type) {
+                            ContentType.LIVE -> "Watch now"
+                            ContentType.SERIES -> "View episodes"
+                            else -> "Resume"
+                        },
                         leading = "▶",
-                        onClick = { viewModel.activate(featured) },
+                        onClick = { actionItem?.let(viewModel::activate) },
                         modifier = Modifier
-                            .width(116.dp)
-                            .focusProperties { down = downFocus },
+                            .width(122.dp)
+                            .then(if (downFocus != null) Modifier.focusProperties { down = downFocus } else Modifier),
                         focusRequester = primaryFocus,
+                        onFocused = {
+                            viewModel.rememberFocusedItem(
+                                AREA_HOME,
+                                HOME_HERO_FOCUS_SCOPE,
+                                itemKey(featured),
+                            )
+                        },
+                    )
+                } else {
+                    TvButton(
+                        "Browse Live TV",
+                        { viewModel.openCatalog(ContentType.LIVE) },
+                        Modifier
+                            .width(132.dp)
+                            .then(if (downFocus != null) Modifier.focusProperties { down = downFocus } else Modifier),
+                        focusRequester = primaryFocus,
+                        onFocused = {
+                            viewModel.rememberFocusedItem(
+                                AREA_HOME,
+                                HOME_HERO_FOCUS_SCOPE,
+                                "home:hero:browse",
+                            )
+                        },
                     )
                 }
-                TvButton(
-                    label = "Browse Live TV",
-                    onClick = { viewModel.openCatalog(ContentType.LIVE) },
-                    style = TvButtonStyle.Secondary,
-                    modifier = Modifier
-                        .width(122.dp)
-                        .focusProperties { down = downFocus },
-                    focusRequester = if (featured == null) primaryFocus else null,
-                )
             }
         }
     }
 }
 
 @Composable
-private fun ProviderShortcut(
-    type: ContentType,
-    count: Int,
-    catalogsLoading: Boolean,
-    modifier: Modifier,
-    focusRequester: FocusRequester? = null,
-    upFocus: FocusRequester? = null,
-    onClick: () -> Unit,
-) {
+private fun HeroMetadata(item: CatalogItem?) {
+    if (item == null) return
     val colors = palette()
-    val routedModifier = if (upFocus != null) {
-        modifier.focusProperties { up = upFocus }
-    } else {
-        modifier
+    val parts = buildList {
+        item.releaseDate?.take(4)?.takeIf { it.all(Char::isDigit) }?.let(::add)
+        item.rating?.let { add("★ ${"%.1f".format(it)}") }
+        item.genre?.split(',', '/', limit = 2)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }?.let(::add)
+        formatRuntime(item.runtimeMinutes).takeIf { it.isNotBlank() }?.let(::add)
+        if (item.type == ContentType.LIVE) add("LIVE")
     }
-    TvSurface(
-        modifier = routedModifier.height(62.dp),
-        onClick = onClick,
-        focusRequester = focusRequester,
-    ) {
-        Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(32.dp).background(colors.accent.copy(alpha = 0.18f), RoundedCornerShape(9.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                TvIcon(type.iconName(), colors.accent, Modifier.size(18.dp))
-            }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(type.title(), color = colors.text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    if (catalogsLoading && count == 0) "Loading categories…" else "$count categories",
-                    color = colors.muted,
-                    fontSize = 9.sp,
-                )
-            }
-            Text("›", color = colors.accent, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        }
-    }
+    Text(parts.joinToString("   •   "), color = colors.text.copy(alpha = .78f), fontSize = 8.sp, fontWeight = FontWeight.Medium)
 }
 
 @Composable
-private fun ContentRail(
+private fun HomeContentRail(
     spec: HomeRailSpec,
     state: AppUiState,
-    focusRequest: FocusRequest?,
     viewModel: AppViewModel,
+    firstItemFocus: FocusRequester?,
+    focusRequest: FocusRequest?,
+    onRowFocused: () -> Unit,
 ) {
     val rowState = rememberLazyListState()
+    val itemFocusers = remember(spec.scope, spec.items.map(::itemKey)) {
+        List(spec.items.size) { index ->
+            if (index == 0 && firstItemFocus != null) firstItemFocus else FocusRequester()
+        }
+    }
     val targetIndex = remember(spec.items, focusRequest) {
         when {
-            focusRequest == null -> -1
+            focusRequest == null || spec.items.isEmpty() -> -1
             focusRequest.firstItem -> 0
             focusRequest.itemKey != null -> spec.items.indexOfFirst { itemKey(it) == focusRequest.itemKey }.coerceAtLeast(0)
             else -> 0
         }
     }
-    val focusRequester = remember(spec.scope, focusRequest?.itemKey, focusRequest?.firstItem) { FocusRequester() }
-
     LaunchedEffect(focusRequest, targetIndex) {
         if (focusRequest != null && targetIndex in spec.items.indices) {
             rowState.scrollToItem(targetIndex)
-            delay(48L)
-            runCatching { focusRequester.requestFocus() }
-            viewModel.consumeFocusRequest(spec.scope)
+            repeat(5) { attempt ->
+                delay(if (attempt == 0) 32L else 24L)
+                if (runCatching { itemFocusers[targetIndex].requestFocus() }.getOrDefault(false)) {
+                    viewModel.consumeFocusRequest(spec.scope)
+                    return@LaunchedEffect
+                }
+            }
         }
     }
-
-    SectionHeader(
-        spec.title,
-        "${spec.items.size} ${if (spec.items.size == 1) "item" else "items"}",
-    )
-    Spacer(Modifier.height(9.dp))
-    LazyRow(
-        state = rowState,
-        horizontalArrangement = Arrangement.spacedBy(9.dp),
-        contentPadding = PaddingValues(start = 2.dp, end = 12.dp, bottom = 4.dp),
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 22.dp),
     ) {
-        itemsIndexed(spec.items, key = { _, item -> itemKey(item) }) { index, item ->
-            val favorite = state.favorites.any { it.type == item.type && it.id == item.id }
-            val requester = if (focusRequest != null && index == targetIndex) focusRequester else null
-            val onFocused = {
-                viewModel.rememberFocusedItem(AREA_HOME, spec.scope, itemKey(item))
-            }
-            if (item.type == ContentType.LIVE) {
-                LiveItemCard(
-                    item,
-                    favorite,
-                    { viewModel.activate(item) },
-                    Modifier.width(154.dp),
-                    focusRequester = requester,
-                    onFocused = onFocused,
-                )
-            } else {
-                PosterItemCard(
-                    item,
-                    favorite,
-                    { viewModel.activate(item) },
-                    Modifier.width(104.dp),
-                    focusRequester = requester,
-                    onFocused = onFocused,
-                )
+        SectionHeader(spec.title)
+        Spacer(Modifier.height(8.dp))
+        LazyRow(
+            state = rowState,
+            horizontalArrangement = Arrangement.spacedBy(if (spec.type == ContentType.LIVE) 10.dp else 12.dp),
+            contentPadding = PaddingValues(bottom = 8.dp),
+        ) {
+            itemsIndexed(spec.items, key = { _, item -> itemKey(item) }) { index, item ->
+                val favorite = state.favorites.any { it.type == item.type && it.id == item.id }
+                val onFocused = {
+                    onRowFocused()
+                    viewModel.rememberFocusedItem(AREA_HOME, spec.scope, itemKey(item))
+                    if (item.type == ContentType.MOVIE) viewModel.requestMovieDetails(item)
+                }
+                if (spec.type == ContentType.LIVE) {
+                    Box(Modifier.width(104.dp).height(70.dp)) {
+                        TransparentLiveLogoCard(
+                            item = item,
+                            favorite = favorite,
+                            onClick = { viewModel.play(item) },
+                            modifier = Modifier.fillMaxSize(),
+                            focusRequester = itemFocusers[index],
+                            onFocused = onFocused,
+                        )
+                    }
+                } else {
+                    Box(Modifier.width(105.dp)) {
+                        PosterArtCard(
+                            item = state.richItems[itemKey(item)] ?: item,
+                            favorite = favorite,
+                            onClick = { if (item.type == ContentType.SERIES) viewModel.openDetail(item) else viewModel.play(item) },
+                            modifier = Modifier.fillMaxWidth(),
+                            focusRequester = itemFocusers[index],
+                            onFocused = onFocused,
+                        )
+                    }
+                }
             }
         }
     }

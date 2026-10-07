@@ -3,16 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <meta name="theme-color" content="#071014">
+  <meta name="theme-color" content="#07101d">
   <title>XtreamlyTV</title>
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/v0.7-ui.css">
+  <link rel="stylesheet" href="css/startup.css">
 </head>
 <body>
-  <div id="playerHost" class="player-host" aria-hidden="true"></div>
+  <div id="startupSplash" class="xt-startup" aria-hidden="true">
+    <div class="xt-startup-glow"></div>
+    <div class="xt-startup-stage">
+      <div class="xt-startup-mark-wrap">
+        <span class="theme-logo-mark xt-startup-mark"></span>
+        <span class="xt-startup-pulse"></span>
+      </div>
+      <div class="xt-startup-wordmask"><img class="xt-startup-wordmark" src="assets/xtreamlytv-wordmark-text.svg" alt="XtreamlyTV"></div>
+    </div>
+    <div class="xt-startup-status">Live<i></i>Movies<i></i>Series</div>
+  </div>
+<div id="playerHost" class="player-host" aria-hidden="true"></div>
   <div id="app" aria-live="polite"></div>
   <div id="toast" class="toast" role="status"></div>
 
+  <script src="js/startup.js"></script>
   <script src="js/core.js"></script>
   <script src="js/store.js"></script>
   <script src="js/api.js"></script>
@@ -21,5 +35,6 @@
   <script src="js/virtual-grid.js"></script>
   <script src="js/category-rail.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/v0.7-ui.js"></script>
 </body>
 </html>

@@ -83,3 +83,11 @@ test('migrates missing order fields without losing existing groups', () => {
   assert.deepEqual(Array.from(state.favoriteGroupOrder), ['all', 'live', 'movie', 'series', 'legacy']);
   assert.deepEqual(Object.keys(state.favoriteItemOrders), []);
 });
+
+
+test('favoriteAutoSort defaults to enabled and can be disabled', () => {
+  const store = createStore();
+  assert.equal(store.getState().settings.favoriteAutoSort, true);
+  store.updateSettings({ favoriteAutoSort: false });
+  assert.equal(store.getState().settings.favoriteAutoSort, false);
+});

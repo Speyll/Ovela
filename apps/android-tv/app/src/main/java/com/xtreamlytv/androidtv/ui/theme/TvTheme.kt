@@ -3,7 +3,12 @@ package com.xtreamlytv.androidtv.ui.theme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.material3.Typography
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import com.xtreamlytv.androidtv.R
 import com.xtreamlytv.androidtv.model.AppTheme
 
 @Immutable
@@ -21,12 +26,63 @@ data class TvPalette(
     val danger: Color = Color(0xFFFF6F7D),
 )
 
-val LocalTvPalette = staticCompositionLocalOf { paletteFor(AppTheme.TEAL) }
+val LocalAppTheme = staticCompositionLocalOf { AppTheme.BLUE }
+val LocalTvPalette = staticCompositionLocalOf { paletteFor(AppTheme.BLUE) }
+
+
+/**
+ * Arimo is bundled into Android TV and self-hosted by webOS. Arimo was
+ * designed as a metrically compatible Arial replacement, which closely
+ * matches the original webOS `Arial, Helvetica, sans-serif` presentation.
+ */
+val XtreamlyFontFamily = FontFamily(
+    Font(R.font.arimo_regular, weight = FontWeight.Normal),
+    Font(R.font.arimo_regular, weight = FontWeight.Medium),
+    Font(R.font.arimo_bold, weight = FontWeight.SemiBold),
+    Font(R.font.arimo_bold, weight = FontWeight.Bold),
+)
+
+private val MaterialTypography = Typography()
+
+val XtreamlyTypography = Typography(
+    displayLarge = MaterialTypography.displayLarge.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Normal),
+    displayMedium = MaterialTypography.displayMedium.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Normal),
+    displaySmall = MaterialTypography.displaySmall.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Normal),
+    headlineLarge = MaterialTypography.headlineLarge.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Normal),
+    headlineMedium = MaterialTypography.headlineMedium.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Normal),
+    headlineSmall = MaterialTypography.headlineSmall.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Normal),
+    titleLarge = MaterialTypography.titleLarge.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Medium),
+    titleMedium = MaterialTypography.titleMedium.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Medium),
+    titleSmall = MaterialTypography.titleSmall.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Medium),
+    bodyLarge = MaterialTypography.bodyLarge.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Normal),
+    bodyMedium = MaterialTypography.bodyMedium.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Normal),
+    bodySmall = MaterialTypography.bodySmall.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Normal),
+    labelLarge = MaterialTypography.labelLarge.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Medium),
+    labelMedium = MaterialTypography.labelMedium.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Medium),
+    labelSmall = MaterialTypography.labelSmall.copy(fontFamily = XtreamlyFontFamily, fontWeight = FontWeight.Normal),
+)
 
 @Composable
 fun palette(): TvPalette = LocalTvPalette.current
 
+/**
+ * Keep Android TV on the exact same appearance palette as the webOS v0.7 RC.
+ * The previous Android parity pass accidentally rotated bg/bg2/bg3, which made
+ * the application read much brighter and more saturated than webOS.
+ */
 fun paletteFor(theme: AppTheme): TvPalette = when (theme) {
+    AppTheme.BLUE -> TvPalette(
+        background = Color(0xFF07101D),
+        background2 = Color(0xFF0A1930),
+        background3 = Color(0xFF050B13),
+        panel = Color(0xFF10243B),
+        panelStrong = Color(0xFF142E4B),
+        text = Color(0xFFF4F8FF),
+        muted = Color(0xFF91A8C2),
+        accent = Color(0xFF54B8FF),
+        accentSecondary = Color(0xFF6380FF),
+        accentInk = Color(0xFF061A2A),
+    )
     AppTheme.TEAL -> TvPalette(
         background = Color(0xFF071014),
         background2 = Color(0xFF08171D),
@@ -74,17 +130,5 @@ fun paletteFor(theme: AppTheme): TvPalette = when (theme) {
         accent = Color(0xFFFF76BA),
         accentSecondary = Color(0xFFD66CFF),
         accentInk = Color(0xFF2E071B),
-    )
-    AppTheme.BLUE -> TvPalette(
-        background = Color(0xFF07101D),
-        background2 = Color(0xFF0A1930),
-        background3 = Color(0xFF050B13),
-        panel = Color(0xFF10243B),
-        panelStrong = Color(0xFF142E4B),
-        text = Color(0xFFF4F8FF),
-        muted = Color(0xFF91A8C2),
-        accent = Color(0xFF54B8FF),
-        accentSecondary = Color(0xFF6380FF),
-        accentInk = Color(0xFF061A2A),
     )
 }

@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.xtreamlytv.androidtv.data.CredentialsStore
 import com.xtreamlytv.androidtv.data.LocalStateStore
+import com.xtreamlytv.androidtv.data.MediaCacheStore
 import com.xtreamlytv.androidtv.data.ProviderUrl
 import com.xtreamlytv.androidtv.data.XtreamClient
 import com.xtreamlytv.androidtv.data.itemKey
@@ -13,6 +14,7 @@ import com.xtreamlytv.androidtv.model.CatalogItem
 import com.xtreamlytv.androidtv.model.Category
 import com.xtreamlytv.androidtv.model.ContentType
 import com.xtreamlytv.androidtv.model.Credentials
+import com.xtreamlytv.androidtv.model.EpgProgram
 import com.xtreamlytv.androidtv.model.FavoriteGroup
 import com.xtreamlytv.androidtv.model.FavoriteGroupAppearance
 import com.xtreamlytv.androidtv.model.PlaybackProgress
@@ -24,6 +26,8 @@ import java.net.UnknownHostException
 import javax.net.ssl.SSLHandshakeException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.async
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.coroutineScope
@@ -87,6 +91,9 @@ data class AppUiState(
     val settings: AppSettings = AppSettings(),
     val detailEpisodes: List<CatalogItem> = emptyList(),
     val detailSelectedSeason: Int? = null,
+    val richItems: Map<String, CatalogItem> = emptyMap(),
+    val epg: Map<String, List<EpgProgram>> = emptyMap(),
+    val epgLoading: Set<String> = emptySet(),
     val focusRequest: FocusRequest? = null,
 )
 
@@ -97,7 +104,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val localStateStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         LocalStateStore(application)
     }
+    private val mediaCacheStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { MediaCacheStore(application) }
     private var client: XtreamClient? = null
+    private val movieDetailJobs = mutableMapOf<String, Job>()
     private val categoryCache = LinkedHashMap<String, List<CatalogItem>>(16, 0.75f, true)
     private var catalogRequestId = 0L
     private val lastFocusByArea = mutableMapOf<String, FocusRequest>()
@@ -216,6 +225,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
                 client = candidate
                 categoryCache.clear()
+                movieDetailJobs.values.forEach { it.cancel() }
+                movieDetailJobs.clear()
                 if (persist) {
                     withContext(Dispatchers.IO) { credentialsStore.save(normalizedCredentials) }
                 }
@@ -325,39 +336,54 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun openCatalog(type: ContentType) {
         val categories = _state.value.categories[type].orEmpty()
         val selected = _state.value.selectedCategories[type] ?: categories.firstOrNull()
-        val remembered = lastFocusByArea[catalogArea(type)]
+        // Top-menu entry always starts at the category wheel. Remembered poster/EPG
+        // focus is intentionally ignored here; selecting a category from the wheel
+        // will create the first-item focus request after the category is activated.
         _state.update {
             it.copy(
                 screen = AppScreen.Catalog(type),
                 items = emptyList(),
                 searchQuery = "",
                 error = null,
-                focusRequest = remembered ?: selected?.let { category ->
-                    FocusRequest(catalogFocusScope(type, category.id), firstItem = true)
-                },
+                focusRequest = null,
             )
         }
-        selected?.let { selectCategory(type, it, preserveRememberedFocus = remembered != null) }
+        selected?.let { category ->
+            if (category.id.startsWith("__")) {
+                selectVirtualCategory(type, category, preserveFocusRequest = true)
+            } else {
+                selectCategory(type, category, preserveRememberedFocus = true)
+            }
+        }
     }
 
     fun selectCategory(
         type: ContentType,
         category: Category,
         preserveRememberedFocus: Boolean = false,
+        deferFirstItemFocus: Boolean = false,
     ) {
         val api = client ?: return
         val key = cacheKey(type, category.id)
         val cached = categoryCache[key]
         val requestId = ++catalogRequestId
+        val retainCurrentItems = cached == null &&
+            (_state.value.screen as? AppScreen.Catalog)?.type == type &&
+            _state.value.items.isNotEmpty()
         _state.update {
             it.copy(
                 loading = cached == null,
                 selectedCategories = it.selectedCategories + (type to category),
-                items = cached.orEmpty(),
+                items = cached ?: if (retainCurrentItems) it.items else emptyList(),
                 searchQuery = "",
                 error = null,
-                focusRequest = if (preserveRememberedFocus) it.focusRequest
-                else FocusRequest(catalogFocusScope(type, category.id), firstItem = true),
+                focusRequest = when {
+                    deferFirstItemFocus && cached == null -> null
+                    deferFirstItemFocus && !cached.isNullOrEmpty() ->
+                        FocusRequest(catalogFocusScope(type, category.id), firstItem = true)
+                    preserveRememberedFocus -> it.focusRequest
+                    else -> FocusRequest(catalogFocusScope(type, category.id), firstItem = true)
+                },
             )
         }
         if (cached != null) {
@@ -369,7 +395,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 .onSuccess { items ->
                     cacheCategory(type, category.id, items)
                     if (requestId == catalogRequestId && _state.value.screen == AppScreen.Catalog(type)) {
-                        _state.update { it.copy(loading = false, items = items) }
+                        _state.update {
+                            it.copy(
+                                loading = false,
+                                items = items,
+                                focusRequest = if (deferFirstItemFocus && items.isNotEmpty()) {
+                                    FocusRequest(catalogFocusScope(type, category.id), firstItem = true)
+                                } else {
+                                    it.focusRequest
+                                },
+                            )
+                        }
                     }
                     updateLoadedItems(type, items)
                 }
@@ -385,8 +421,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun activate(item: CatalogItem) {
         when (item.type) {
-            ContentType.EPISODE -> play(item)
-            ContentType.LIVE, ContentType.MOVIE, ContentType.SERIES -> openDetail(item)
+            ContentType.LIVE, ContentType.MOVIE, ContentType.EPISODE -> play(item)
+            ContentType.SERIES -> openDetail(item)
         }
     }
 
@@ -409,24 +445,133 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadSeriesEpisodes(series: CatalogItem) {
         val api = client ?: return
         viewModelScope.launch {
-            runCatching { api.seriesEpisodes(series) }
-                .onSuccess { episodes ->
-                    val current = _state.value.screen as? AppScreen.Detail
-                    if (current?.item?.id == series.id) {
-                        val firstSeason = episodes.mapNotNull { it.season }.distinct().sorted().firstOrNull()
-                        _state.update {
-                            it.copy(
-                                loading = false,
-                                detailEpisodes = episodes,
-                                detailSelectedSeason = firstSeason,
-                            )
-                        }
-                    }
+            val cached = withContext(Dispatchers.IO) { mediaCacheStore.getSeries(series.id) }
+            if (cached != null) {
+                applySeriesDetail(series.id, cached.series, cached.episodes)
+                return@launch
+            }
+            runCatching { api.seriesDetail(series) }
+                .onSuccess { (richSeries, episodes) ->
+                    withContext(Dispatchers.IO) { mediaCacheStore.putSeries(richSeries, episodes) }
+                    applySeriesDetail(series.id, richSeries, episodes)
                 }
                 .onFailure { error ->
                     _state.update { it.copy(loading = false, error = error.userMessage()) }
                 }
         }
+    }
+
+    private fun applySeriesDetail(seriesId: String, richSeries: CatalogItem, episodes: List<CatalogItem>) {
+        val current = _state.value.screen as? AppScreen.Detail ?: return
+        if (current.item.id != seriesId) return
+        val firstSeason = episodes.mapNotNull { it.season }.distinct().sorted().firstOrNull()
+        _state.update { state ->
+            state.copy(
+                screen = current.copy(item = richSeries),
+                loading = false,
+                detailEpisodes = episodes,
+                detailSelectedSeason = firstSeason,
+                richItems = state.richItems + (itemKey(richSeries) to richSeries),
+            )
+        }
+    }
+
+    fun requestMovieDetails(item: CatalogItem, delayMs: Long = 160L) {
+        if (item.type != ContentType.MOVIE) return
+        val key = itemKey(item)
+        if (_state.value.richItems.containsKey(key) || movieDetailJobs[key]?.isActive == true) return
+
+        movieDetailJobs[key] = viewModelScope.launch {
+            try {
+                val cached = withContext(Dispatchers.IO) { mediaCacheStore.getMovie(item.id) }
+                if (cached != null) {
+                    _state.update { it.copy(richItems = it.richItems + (key to cached)) }
+                    return@launch
+                }
+
+                if (delayMs > 0L) delay(delayMs)
+                val api = client ?: return@launch
+                runCatching { api.movieInfo(item) }.onSuccess { rich ->
+                    withContext(Dispatchers.IO) { mediaCacheStore.putMovie(rich) }
+                    _state.update { state -> state.copy(richItems = state.richItems + (key to rich)) }
+                }
+            } finally {
+                movieDetailJobs.remove(key)
+            }
+        }
+    }
+
+    fun warmMovieDetails(items: List<CatalogItem>) {
+        items
+            .asSequence()
+            .filter { it.type == ContentType.MOVIE }
+            .distinctBy(::itemKey)
+            .take(5)
+            .forEachIndexed { index, item ->
+                requestMovieDetails(item, delayMs = 220L + index * 90L)
+            }
+    }
+
+    fun richItem(item: CatalogItem): CatalogItem = _state.value.richItems[itemKey(item)] ?: item
+
+    fun ensureEpg(channels: List<CatalogItem>) {
+        val api = client ?: return
+        channels.filter { it.type == ContentType.LIVE }.take(8).forEach { channel ->
+            val id = channel.id
+            val state = _state.value
+            if (state.epg.containsKey(id) || id in state.epgLoading) return@forEach
+            _state.update { it.copy(epgLoading = it.epgLoading + id) }
+            viewModelScope.launch {
+                val programs = runCatching { api.shortEpg(id, 12) }.getOrDefault(emptyList())
+                _state.update { current ->
+                    current.copy(
+                        epg = current.epg + (id to programs),
+                        epgLoading = current.epgLoading - id,
+                    )
+                }
+            }
+        }
+    }
+
+    fun virtualCategoryItems(type: ContentType, categoryId: String): List<CatalogItem> {
+        val current = _state.value
+        val base = current.favorites.filter { it.type == type }
+        val filtered = when {
+            categoryId == "__favorites__" -> base
+            categoryId.startsWith("__group__:") -> {
+                val groupId = categoryId.removePrefix("__group__:")
+                val keys = current.favoriteGroups.firstOrNull { it.id == groupId }?.itemKeys.orEmpty()
+                base.filter { itemKey(it) in keys }
+            }
+            else -> emptyList()
+        }
+        return if (current.settings.favoriteAutoSort) filtered.sortedBy { it.name.lowercase() } else filtered
+    }
+
+    fun selectVirtualCategory(
+        type: ContentType,
+        category: Category,
+        preserveFocusRequest: Boolean = false,
+        deferFirstItemFocus: Boolean = false,
+    ) {
+        val items = virtualCategoryItems(type, category.id)
+        _state.update {
+            it.copy(
+                selectedCategories = it.selectedCategories + (type to category),
+                items = items,
+                searchQuery = "",
+                loading = false,
+                error = null,
+                focusRequest = when {
+                    deferFirstItemFocus && items.isNotEmpty() ->
+                        FocusRequest(catalogFocusScope(type, category.id), firstItem = true)
+                    deferFirstItemFocus -> null
+                    preserveFocusRequest -> it.focusRequest
+                    else -> FocusRequest(catalogFocusScope(type, category.id), firstItem = true)
+                },
+            )
+        }
+        updateLoadedItems(type, items)
     }
 
     fun selectDetailSeason(seriesId: String, season: Int) {
@@ -505,6 +650,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
         persistFavorites(nextFavorites, nextGroups, nextOrders)
+        val screen = _state.value.screen as? AppScreen.Catalog
+        val selected = screen?.let { _state.value.selectedCategories[it.type] }
+        if (screen != null && selected != null && selected.id.startsWith("__")) {
+            val refreshed = virtualCategoryItems(screen.type, selected.id)
+            _state.update { it.copy(items = refreshed) }
+        }
     }
 
     fun isFavorite(item: CatalogItem): Boolean =
@@ -657,7 +808,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun saveFavoriteItemOrder(groupId: String, order: List<String>) {
-        if (groupId == "all") return
+        if (groupId == "all" || _state.value.settings.favoriteAutoSort) return
         val validFavoriteKeys = _state.value.favorites.map(::itemKey).toSet()
         val normalized = order.filter { it in validFavoriteKeys }.distinct().take(250)
         val orders = _state.value.favoriteItemOrders + (groupId to normalized)
@@ -674,7 +825,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearCatalogCache() {
         categoryCache.clear()
-        _state.update { it.copy(items = emptyList(), loadedItems = emptyMap(), error = null) }
+        movieDetailJobs.values.forEach { it.cancel() }
+        movieDetailJobs.clear()
+        mediaCacheStore.clear()
+        _state.update { it.copy(items = emptyList(), loadedItems = emptyMap(), richItems = emptyMap(), epg = emptyMap(), error = null) }
     }
 
     fun clearHistory() {
@@ -704,6 +858,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun disconnect() {
         client = null
         categoryCache.clear()
+        movieDetailJobs.values.forEach { it.cancel() }
+        movieDetailJobs.clear()
         lastFocusByArea.clear()
         _state.update {
             it.copy(
@@ -718,6 +874,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 selectedCategories = emptyMap(),
                 items = emptyList(),
                 loadedItems = emptyMap(),
+                richItems = emptyMap(),
+                epg = emptyMap(),
+                epgLoading = emptySet(),
                 focusRequest = null,
             )
         }
@@ -741,7 +900,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     focusRequest = screen.returnFocus,
                 )
             }
-            AppScreen.FavoriteGroupsManager -> openFavorites()
+            AppScreen.FavoriteGroupsManager -> openSettings()
             is AppScreen.FavoriteGroupEditor -> openFavoriteGroupsManager()
             is AppScreen.Catalog, AppScreen.Favorites, is AppScreen.FavoriteGroupBrowser, AppScreen.Settings -> openHome()
         }

@@ -6,22 +6,25 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -29,151 +32,187 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xtreamlytv.androidtv.BuildConfig
-import com.xtreamlytv.androidtv.model.AppSettings
 import com.xtreamlytv.androidtv.model.AppTheme
 import com.xtreamlytv.androidtv.model.StreamFormat
 import com.xtreamlytv.androidtv.ui.theme.palette
 import com.xtreamlytv.androidtv.ui.theme.paletteFor
+import kotlinx.coroutines.delay
 
 @Composable
-fun SettingsScreen(state: AppUiState, viewModel: AppViewModel) {
+fun SettingsScreen(
+    state: AppUiState,
+    viewModel: AppViewModel,
+    contentEntryFocus: FocusRequester,
+) {
     var editingProvider by remember { mutableStateOf(false) }
     var server by remember(state.credentials) { mutableStateOf(state.credentials?.server.orEmpty()) }
     var username by remember(state.credentials) { mutableStateOf(state.credentials?.username.orEmpty()) }
     var password by remember(state.credentials) { mutableStateOf(state.credentials?.password.orEmpty()) }
+    val scrollState = rememberScrollState()
 
-    LazyColumn(
-        contentPadding = PaddingValues(bottom = 28.dp),
+    // When the edit button is replaced by the first text field, keep the
+    // content-entry focus target valid instead of letting focus jump back to
+    // the Settings cog.
+    LaunchedEffect(editingProvider) {
+        if (editingProvider) {
+            delay(24L)
+            runCatching { contentEntryFocus.requestFocus() }
+        }
+    }
+
+    // Settings is intentionally a regular scroll column rather than a lazy
+    // list. All focus targets stay composed, so D-pad focus can continue down
+    // the complete page and Compose can bring the focused control into view.
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(bottom = 52.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item {
-            SettingsCard("Provider", "Your saved Xtream connection. Edit only when you want to reconnect with different details.") {
-                if (!editingProvider) {
-                    ProviderSummaryRow("Server", state.credentials?.server ?: "Not configured")
-                    ProviderSummaryRow("Username", state.credentials?.username ?: "Not configured")
-                    ProviderSummaryRow("Password", if (state.credentials == null) "Not configured" else "••••••••")
-                    Spacer(Modifier.height(9.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        TvButton("Edit provider", { editingProvider = true }, Modifier.width(112.dp))
-                        TvButton("Disconnect provider", viewModel::disconnect, Modifier.width(142.dp), TvButtonStyle.Danger)
-                    }
-                } else {
-                    TvTextField("Server URL", server, { server = it }, placeholder = "http://provider.example:port")
-                    Spacer(Modifier.height(7.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TvTextField("Username", username, { username = it }, Modifier.weight(1f))
-                        TvTextField("Password", password, { password = it }, Modifier.weight(1f), password = true)
-                    }
-                    Spacer(Modifier.height(9.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        TvButton(
-                            "Save and reconnect",
-                            { viewModel.updateProvider(com.xtreamlytv.androidtv.model.Credentials(server, username, password)); editingProvider = false },
-                            Modifier.width(142.dp),
+        SettingsCard("Provider", "Your saved Xtream connection. Edit only when you want to reconnect with different details.") {
+            if (!editingProvider) {
+                ProviderSummaryRow("Server", state.credentials?.server ?: "Not configured")
+                ProviderSummaryRow("Username", state.credentials?.username ?: "Not configured")
+                ProviderSummaryRow("Password", if (state.credentials == null) "Not configured" else "••••••••")
+                Spacer(Modifier.height(9.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    TvButton(
+                        "Edit provider",
+                        { editingProvider = true },
+                        Modifier.width(112.dp),
+                        focusRequester = contentEntryFocus,
+                    )
+                    TvButton("Disconnect provider", viewModel::disconnect, Modifier.width(142.dp), TvButtonStyle.Danger)
+                }
+            } else {
+                TvTextField(
+                    "Server URL",
+                    server,
+                    { server = it },
+                    placeholder = "http://provider.example:port",
+                    focusRequester = contentEntryFocus,
+                )
+                Spacer(Modifier.height(7.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TvTextField("Username", username, { username = it }, Modifier.weight(1f))
+                    TvTextField("Password", password, { password = it }, Modifier.weight(1f), password = true)
+                }
+                Spacer(Modifier.height(9.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    TvButton(
+                        "Save and reconnect",
+                        {
+                            viewModel.updateProvider(com.xtreamlytv.androidtv.model.Credentials(server, username, password))
+                            editingProvider = false
+                        },
+                        Modifier.width(142.dp),
+                    )
+                    TvButton("Cancel", { editingProvider = false }, Modifier.width(76.dp), TvButtonStyle.Secondary)
+                }
+            }
+        }
+
+        SettingsCard("Appearance", "Choose a skin. The layout remains identical while the background, panels, focus ring, and highlights change hue.") {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                AppTheme.entries.forEach { theme ->
+                    ThemeChoice(
+                        theme = theme,
+                        selected = state.settings.theme == theme,
+                        onClick = { viewModel.updateSettings(state.settings.copy(theme = theme)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+
+        SettingsCard("Favorites & Lists", "Favorites live inside the Live TV, Movies, and Series category wheels, matching webOS v0.7.") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TvChip(
+                    label = if (state.settings.favoriteAutoSort) "Auto-sort A–Z: On" else "Auto-sort A–Z: Off",
+                    selected = state.settings.favoriteAutoSort,
+                    onClick = { viewModel.updateSettings(state.settings.copy(favoriteAutoSort = !state.settings.favoriteAutoSort)) },
+                )
+                TvButton("Manage favorite lists", viewModel::openFavoriteGroupsManager, Modifier.width(162.dp), TvButtonStyle.Secondary)
+            }
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SettingsCard(
+                title = "Playback compatibility",
+                description = "Automatic mode tries HLS and MPEG-TS. VOD and episodes use their provider container.",
+                modifier = Modifier.weight(1f),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    StreamFormat.entries.forEach { format ->
+                        SettingChoice(
+                            label = format.label,
+                            selected = state.settings.streamFormat == format,
+                            onClick = { viewModel.updateSettings(state.settings.copy(streamFormat = format)) },
                         )
-                        TvButton("Cancel", { editingProvider = false }, Modifier.width(76.dp), TvButtonStyle.Secondary)
                     }
                 }
             }
-        }
-
-        item {
-            SettingsCard("Appearance", "Choose a skin. The layout remains identical while the background, panels, focus ring, and highlights change hue.") {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    AppTheme.entries.forEach { theme ->
-                        ThemeChoice(
-                            theme = theme,
-                            selected = state.settings.theme == theme,
-                            onClick = { viewModel.updateSettings(state.settings.copy(theme = theme)) },
-                            modifier = Modifier.weight(1f),
+            SettingsCard(
+                title = "Performance",
+                description = "Category data plus Movie/Series metadata are cached locally. Artwork uses Coil/HTTP disk cache for fast revisits across app restarts.",
+                modifier = Modifier.weight(1f),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(2, 3, 5).forEach { count ->
+                        TvChip(
+                            label = when (count) { 2 -> "2 · Low"; 3 -> "3 · Balanced"; else -> "5 · Fast" },
+                            selected = state.settings.maxCachedCategories == count,
+                            onClick = { viewModel.updateSettings(state.settings.copy(maxCachedCategories = count)) },
                         )
                     }
                 }
+                Spacer(Modifier.height(8.dp))
+                TvButton("Clear media caches", viewModel::clearCatalogCache, Modifier.width(138.dp), TvButtonStyle.Secondary)
             }
         }
 
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SettingsCard(
-                    title = "Playback compatibility",
-                    description = "Automatic mode tries HLS and MPEG-TS. VOD and episodes use their provider container.",
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        StreamFormat.entries.forEach { format ->
-                            SettingChoice(
-                                label = format.label,
-                                selected = state.settings.streamFormat == format,
-                                onClick = { viewModel.updateSettings(state.settings.copy(streamFormat = format)) },
-                            )
-                        }
-                    }
-                }
-                SettingsCard(
-                    title = "Performance",
-                    description = "Only visible cards are rendered. Category data is cached temporarily for quick revisits.",
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(2, 3, 5).forEach { count ->
-                            TvChip(
-                                label = when (count) { 2 -> "2 · Low"; 3 -> "3 · Balanced"; else -> "5 · Fast" },
-                                selected = state.settings.maxCachedCategories == count,
-                                onClick = { viewModel.updateSettings(state.settings.copy(maxCachedCategories = count)) },
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    TvButton("Clear catalog cache", viewModel::clearCatalogCache, Modifier.width(138.dp), TvButtonStyle.Secondary)
-                }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SettingsCard(
+                title = "Native networking",
+                description = "Android TV connects directly to your provider. The optional webOS CORS bridge is not required on this platform.",
+                modifier = Modifier.weight(1f),
+            ) {
+                DiagnosticPill("Direct provider access")
+                DiagnosticPill("HTTP and HTTPS supported")
+                DiagnosticPill("Automatic container fallback")
+            }
+            SettingsCard(
+                title = "Catalog diagnostics",
+                description = "Provider catalogs remain category-scoped so the full library is never loaded into TV memory at once.",
+                modifier = Modifier.weight(1f),
+            ) {
+                DiagnosticPill("${state.loadedItems.values.sumOf { it.size }} items currently indexed")
+                DiagnosticPill("${state.categories.values.sumOf { it.size }} provider categories")
+                DiagnosticPill("Adaptive lazy rendering active")
             }
         }
 
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SettingsCard(
-                    title = "Native networking",
-                    description = "Android TV connects directly to your provider. The optional webOS CORS bridge is not required on this platform.",
-                    modifier = Modifier.weight(1f),
-                ) {
-                    DiagnosticPill("Direct provider access")
-                    DiagnosticPill("HTTP and HTTPS supported")
-                    DiagnosticPill("Automatic container fallback")
-                }
-                SettingsCard(
-                    title = "Catalog diagnostics",
-                    description = "Provider catalogs remain category-scoped so the full library is never loaded into TV memory at once.",
-                    modifier = Modifier.weight(1f),
-                ) {
-                    DiagnosticPill("${state.loadedItems.values.sumOf { it.size }} items currently indexed")
-                    DiagnosticPill("${state.categories.values.sumOf { it.size }} provider categories")
-                    DiagnosticPill("Adaptive lazy rendering active")
-                }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SettingsCard(
+                title = "About XtreamlyTV",
+                description = "Open-source living-room IPTV client. No channels or subscriptions are included.",
+                modifier = Modifier.weight(1f),
+            ) {
+                ProviderSummaryRow("Version", BuildConfig.VERSION_NAME)
+                ProviderSummaryRow("Application ID", "com.github.xtreamlytv.androidtv")
+                ProviderSummaryRow("Platform", "Android TV ${Build.VERSION.RELEASE} · API ${Build.VERSION.SDK_INT}")
+                ProviderSummaryRow("Device", "${Build.MANUFACTURER} ${Build.MODEL}")
+                ProviderSummaryRow("Playback", "AndroidX Media3 ExoPlayer")
             }
-        }
-
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SettingsCard(
-                    title = "About XtreamlyTV",
-                    description = "Open-source living-room IPTV client. No channels or subscriptions are included.",
-                    modifier = Modifier.weight(1f),
-                ) {
-                    ProviderSummaryRow("Version", BuildConfig.VERSION_NAME)
-                    ProviderSummaryRow("Application ID", "com.github.xtreamlytv.androidtv")
-                    ProviderSummaryRow("Platform", "Android TV ${Build.VERSION.RELEASE} · API ${Build.VERSION.SDK_INT}")
-                    ProviderSummaryRow("Device", "${Build.MANUFACTURER} ${Build.MODEL}")
-                    ProviderSummaryRow("Playback", "AndroidX Media3 ExoPlayer")
-                }
-                SettingsCard(
-                    title = "Privacy & history",
-                    description = "No analytics, advertising, or tracking. Credentials, favorites, groups, recent items, and resume positions remain on this TV.",
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("${state.recent.size} recent items · ${state.progress.size} resume positions", color = palette().muted, fontSize = 9.sp)
-                    Spacer(Modifier.height(9.dp))
-                    TvButton("Clear watch history", viewModel::clearHistory, Modifier.width(132.dp), TvButtonStyle.Secondary)
-                }
+            SettingsCard(
+                title = "Privacy & history",
+                description = "No analytics, advertising, or tracking. Credentials, favorites, groups, recent items, and resume positions remain on this TV.",
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("${state.recent.size} recent items · ${state.progress.size} resume positions", color = palette().muted, fontSize = 9.sp)
+                Spacer(Modifier.height(9.dp))
+                TvButton("Clear watch history", viewModel::clearHistory, Modifier.width(132.dp), TvButtonStyle.Secondary)
             }
         }
     }
@@ -189,14 +228,14 @@ private fun SettingsCard(
     val colors = palette()
     Column(
         modifier
-            .background(colors.panel.copy(alpha = 0.86f), RoundedCornerShape(14.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(14.dp))
-            .padding(14.dp),
+            .background(colors.panel.copy(alpha = 0.72f), RoundedCornerShape(12.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.055f), RoundedCornerShape(12.dp))
+            .padding(12.dp),
     ) {
-        Text(title, color = colors.text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text(title, color = colors.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(3.dp))
-        Text(description, color = colors.muted, fontSize = 9.sp, lineHeight = 12.sp)
-        Spacer(Modifier.height(10.dp))
+        Text(description, color = colors.muted, fontSize = 8.5.sp, lineHeight = 11.sp)
+        Spacer(Modifier.height(9.dp))
         content()
     }
 }
@@ -204,35 +243,35 @@ private fun SettingsCard(
 @Composable
 private fun ProviderSummaryRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Text(label, color = palette().muted, fontSize = 9.sp, modifier = Modifier.width(78.dp))
-        Text(value, color = palette().text, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(label, color = palette().muted, fontSize = 8.5.sp, modifier = Modifier.width(78.dp))
+        Text(value, color = palette().text, fontSize = 8.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
     }
 }
 
 @Composable
 private fun ThemeChoice(theme: AppTheme, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val preview = paletteFor(theme)
-    TvSurface(modifier.height(54.dp), onClick = onClick, active = selected) {
-        Row(Modifier.fillMaxWidth().height(54.dp).padding(horizontal = 9.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+    TvSurface(modifier.height(50.dp), onClick = onClick, active = selected) {
+        Row(Modifier.fillMaxWidth().height(50.dp).padding(horizontal = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             androidx.compose.foundation.layout.Box(
                 Modifier
-                    .width(27.dp)
-                    .height(27.dp)
-                    .background(Brush.linearGradient(listOf(preview.accent, preview.accentSecondary)), RoundedCornerShape(8.dp)),
+                    .width(24.dp)
+                    .height(24.dp)
+                    .background(Brush.linearGradient(listOf(preview.accent, preview.accentSecondary)), RoundedCornerShape(7.dp)),
             )
-            Spacer(Modifier.width(8.dp))
-            Text(theme.label, color = palette().text, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            if (selected) Text("✓", color = palette().accent, fontSize = 11.sp)
+            Spacer(Modifier.width(7.dp))
+            Text(theme.label, color = palette().text, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            if (selected) Text("✓", color = palette().accent, fontSize = 10.sp)
         }
     }
 }
 
 @Composable
 private fun SettingChoice(label: String, selected: Boolean, onClick: () -> Unit) {
-    TvSurface(Modifier.fillMaxWidth().height(34.dp), onClick = onClick, active = selected) {
-        Row(Modifier.fillMaxWidth().height(34.dp).padding(horizontal = 10.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Text(label, color = if (selected) palette().accent else palette().text, fontSize = 10.sp, modifier = Modifier.weight(1f))
-            Text(if (selected) "✓" else "", color = palette().accent, fontSize = 10.sp)
+    TvSurface(Modifier.fillMaxWidth().height(32.dp), onClick = onClick, active = selected) {
+        Row(Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 9.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text(label, color = if (selected) palette().accent else palette().text, fontSize = 9.sp, modifier = Modifier.weight(1f))
+            Text(if (selected) "✓" else "", color = palette().accent, fontSize = 9.sp)
         }
     }
 }
@@ -245,7 +284,7 @@ private fun DiagnosticPill(label: String) {
         fontSize = 8.sp,
         modifier = Modifier
             .padding(bottom = 5.dp)
-            .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(50))
+            .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(50))
             .padding(horizontal = 8.dp, vertical = 4.dp),
     )
 }

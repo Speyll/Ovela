@@ -167,7 +167,7 @@ private fun FavoritesHubScreen(
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("My Groups", color = palette().text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("My Groups", color = palette().text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Text("Your favorite content, organized your way.", color = palette().muted, fontSize = 10.sp)
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -179,7 +179,7 @@ private fun FavoritesHubScreen(
                     },
                     color = if (movingGroupId != null || movingItemKey != null) palette().accent else palette().muted,
                     fontSize = 8.sp,
-                    fontWeight = if (movingGroupId != null || movingItemKey != null) FontWeight.Bold else FontWeight.Normal,
+                    fontWeight = if (movingGroupId != null || movingItemKey != null) FontWeight.SemiBold else FontWeight.Normal,
                 )
                 TvButton(
                     label = "Edit groups",
@@ -344,7 +344,7 @@ fun FavoriteGroupsManagerScreen(state: AppUiState, viewModel: AppViewModel) {
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Edit Favorite Groups", color = palette().text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("Edit Favorite Groups", color = palette().text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Text("Customize collections or create a new group.", color = palette().muted, fontSize = 10.sp)
             }
             TvButton("Back", viewModel::back, Modifier.width(78.dp), TvButtonStyle.Secondary)
@@ -378,7 +378,7 @@ fun FavoriteGroupsManagerScreen(state: AppUiState, viewModel: AppViewModel) {
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(group.name, color = palette().text, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(group.name, color = palette().text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             Text(
                                 if (custom == null) "Built-in group" else itemCountLabel(group.items.size),
                                 color = palette().muted,
@@ -389,7 +389,7 @@ fun FavoriteGroupsManagerScreen(state: AppUiState, viewModel: AppViewModel) {
                             if (custom == null) "Built-in" else "Edit  ›",
                             color = if (custom == null) palette().muted else palette().accent,
                             fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                         )
                     }
                 }
@@ -426,7 +426,7 @@ fun FavoriteGroupEditorScreen(groupId: String?, state: AppUiState, viewModel: Ap
                 .background(palette().panel.copy(alpha = 0.86f), RoundedCornerShape(14.dp))
                 .padding(14.dp),
         ) {
-            Text(if (groupId == null) "Add Group" else "Edit Group", color = palette().text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text(if (groupId == null) "Add Group" else "Edit Group", color = palette().text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 if (builtIn) "Customize this built-in group name, icon, and color."
                 else "Choose a name, icon, color, and favorites.",
@@ -469,7 +469,7 @@ fun FavoriteGroupEditorScreen(groupId: String?, state: AppUiState, viewModel: Ap
             }
             if (!builtIn) {
                 Spacer(Modifier.height(10.dp))
-                Text("${selectedKeys.size} selected favorites", color = palette().accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("${selectedKeys.size} selected favorites", color = palette().accent, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.weight(1f))
             TvButton(
@@ -493,7 +493,7 @@ fun FavoriteGroupEditorScreen(groupId: String?, state: AppUiState, viewModel: Ap
         } else {
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f).fillMaxHeight()) {
-                Text("Choose favorites", color = palette().text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Choose favorites", color = palette().text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 Text("Press OK to add or remove an item from this group.", color = palette().muted, fontSize = 9.sp)
                 Spacer(Modifier.height(7.dp))
                 FilterRow(filter) { filter = it }
@@ -563,7 +563,7 @@ private fun FavoriteMixedCard(
                     color = colors.text,
                     fontSize = 10.sp,
                     lineHeight = 12.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -572,7 +572,7 @@ private fun FavoriteMixedCard(
                     color = if (moving) colors.accent else colors.muted,
                     fontSize = 8.sp,
                     lineHeight = 9.sp,
-                    fontWeight = if (moving) FontWeight.Bold else FontWeight.Normal,
+                    fontWeight = if (moving) FontWeight.SemiBold else FontWeight.Normal,
                 )
             }
             if (favorite) TvIcon(if (moving) "plus" else "heart", if (moving) colors.accent else colors.danger, Modifier.size(14.dp))
@@ -587,7 +587,7 @@ private fun SelectableFavoriteCard(item: CatalogItem, selected: Boolean, onClick
             Artwork(item, Modifier.width(44.dp).height(52.dp), live = item.type == ContentType.LIVE)
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(item.name, color = palette().text, fontSize = 9.sp, lineHeight = 11.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(item.name, color = palette().text, fontSize = 9.sp, lineHeight = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(item.type.title(), color = palette().muted, fontSize = 7.sp, lineHeight = 8.sp)
             }
             Text(if (selected) "✓" else "+", color = if (selected) palette().accent else palette().muted, fontSize = 14.sp)
@@ -631,7 +631,7 @@ private fun FavoriteGroupCard(
                     color = Color.White,
                     fontSize = 11.sp,
                     lineHeight = 12.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -640,7 +640,7 @@ private fun FavoriteGroupCard(
                     color = Color.White.copy(alpha = 0.82f),
                     fontSize = 8.sp,
                     lineHeight = 9.sp,
-                    fontWeight = if (moving) FontWeight.Bold else FontWeight.Normal,
+                    fontWeight = if (moving) FontWeight.SemiBold else FontWeight.Normal,
                 )
             }
         }

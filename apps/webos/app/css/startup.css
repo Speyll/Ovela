@@ -1,0 +1,207 @@
+/* XtreamlyTV v0.7.0 r27 — full-screen startup + canonical themed branding. */
+
+/* The startup surface is deliberately its own 1920x1080 TV canvas. JS scales
+   it exactly the same way as #app, avoiding older webOS fixed-position quirks. */
+.xt-startup {
+  position:fixed !important;
+  left:0 !important;
+  top:0 !important;
+  width:1920px !important;
+  height:1080px !important;
+  margin:0 !important;
+  padding:0 !important;
+  z-index:2147483500 !important;
+  overflow:hidden !important;
+  background:#02050a !important;
+  opacity:1 !important;
+  visibility:visible !important;
+  pointer-events:auto !important;
+  transform-origin:top left !important;
+  transition:opacity .42s cubic-bezier(.2,.72,.2,1),visibility 0s linear .42s !important;
+}
+.xt-startup.is-leaving {
+  opacity:0 !important;
+  visibility:hidden !important;
+  pointer-events:none !important;
+}
+/* Hide any obsolete r26 markup for the few milliseconds before startup.js
+   replaces it. */
+.xt-startup > * { visibility:hidden; }
+.xt-startup > .xt-startup-frame { visibility:visible; }
+.xt-startup-frame {
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 50% 48%,rgba(var(--accent-rgb),.12),transparent 24%),
+    radial-gradient(ellipse at 50% 112%,rgba(var(--accent-rgb),.10),transparent 42%),
+    linear-gradient(180deg,#02050a 0%,var(--bg-3) 58%,#02050a 100%);
+}
+.xt-startup-frame::before {
+  content:'';
+  position:absolute;
+  top:-12%;
+  bottom:-12%;
+  left:-28%;
+  width:28%;
+  background:linear-gradient(90deg,transparent,rgba(var(--accent-rgb),.025) 24%,rgba(var(--accent-rgb),.28) 50%,rgba(255,255,255,.12) 54%,rgba(var(--accent-rgb),.04) 68%,transparent);
+  transform:skewX(-12deg);
+  animation:xt27-sweep 1.12s cubic-bezier(.22,.72,.17,1) .30s both;
+}
+.xt-startup-frame::after {
+  content:'';
+  position:absolute;
+  inset:0;
+  opacity:.20;
+  background:repeating-linear-gradient(180deg,rgba(255,255,255,.010) 0,rgba(255,255,255,.010) 1px,transparent 1px,transparent 5px);
+  pointer-events:none;
+}
+.xt-startup-lockup {
+  position:relative;
+  z-index:2;
+  width:720px;
+  height:210px;
+  display:grid;
+  place-items:center;
+  opacity:0;
+  transform:scale(.84);
+  animation:xt27-lockup 1.35s cubic-bezier(.16,.78,.18,1) .16s both;
+}
+.xt-startup-wordmark {
+  display:block;
+  width:680px;
+  height:auto;
+  object-fit:contain;
+  filter:drop-shadow(0 0 0 rgba(var(--accent-rgb),0));
+  animation:xt27-logo-glow 1.55s ease-out .18s both;
+}
+.xt-startup-flare {
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:34px;
+  height:34px;
+  border-radius:50%;
+  border:2px solid rgba(var(--accent-rgb),.72);
+  opacity:0;
+  transform:translate(-50%,-50%) scale(.2);
+  animation:xt27-pulse 1.05s ease-out .60s both;
+}
+.xt-startup-status {
+  position:absolute;
+  top:calc(50% + 126px);
+  left:50%;
+  transform:translateX(-50%);
+  white-space:nowrap;
+  color:rgba(235,245,255,.43);
+  font-size:14px;
+  line-height:1;
+  font-weight:800;
+  letter-spacing:5px;
+  text-transform:uppercase;
+  opacity:0;
+  animation:xt27-status .62s ease-out 1.18s forwards;
+}
+.xt-startup-status i {
+  display:inline-block;
+  width:5px;
+  height:5px;
+  margin:0 13px 2px;
+  border-radius:50%;
+  background:var(--accent);
+  box-shadow:0 0 13px rgba(var(--accent-rgb),.80);
+}
+@keyframes xt27-lockup {
+  0% { opacity:0; transform:scale(.84); }
+  35% { opacity:1; }
+  72% { transform:scale(1.035); }
+  100% { opacity:1; transform:scale(1); }
+}
+@keyframes xt27-logo-glow {
+  0% { filter:drop-shadow(0 0 0 rgba(var(--accent-rgb),0)); }
+  58% { filter:drop-shadow(0 0 28px rgba(var(--accent-rgb),.55)); }
+  100% { filter:drop-shadow(0 0 14px rgba(var(--accent-rgb),.25)); }
+}
+@keyframes xt27-sweep {
+  0% { left:-30%; opacity:0; }
+  12% { opacity:1; }
+  100% { left:116%; opacity:0; }
+}
+@keyframes xt27-pulse {
+  0% { opacity:0; transform:translate(-50%,-50%) scale(.2); }
+  20% { opacity:.76; }
+  100% { opacity:0; transform:translate(-50%,-50%) scale(16); }
+}
+@keyframes xt27-status {
+  from { opacity:0; transform:translate(-50%,8px); }
+  to { opacity:1; transform:translate(-50%,0); }
+}
+@media (prefers-reduced-motion:reduce) {
+  .xt-startup-frame::before,.xt-startup-lockup,.xt-startup-wordmark,.xt-startup-flare,.xt-startup-status { animation:none !important; }
+  .xt-startup-lockup,.xt-startup-status { opacity:1 !important; transform:none !important; }
+}
+
+
+/* ========================================================================
+   r28 — legacy webOS-safe startup positioning
+   Do not rely on CSS Grid/place-items/inset for the startup lockup. The
+   startup canvas is always authored at 1920x1080 and startup.js scales that
+   canvas to the viewport. Explicit coordinates keep the animation centered
+   on older LG Chromium builds.
+   ======================================================================== */
+.xt-startup-frame {
+  display:block !important;
+  position:absolute !important;
+  left:0 !important;
+  top:0 !important;
+  right:auto !important;
+  bottom:auto !important;
+  width:1920px !important;
+  height:1080px !important;
+}
+.xt-startup-lockup {
+  position:absolute !important;
+  left:600px !important;
+  top:435px !important;
+  width:720px !important;
+  height:210px !important;
+  margin:0 !important;
+  transform-origin:360px 105px !important;
+}
+.xt-startup-wordmark {
+  position:absolute !important;
+  left:20px !important;
+  top:24px !important;
+  width:680px !important;
+  height:163px !important;
+  margin:0 !important;
+}
+.xt-startup-flare {
+  left:360px !important;
+  top:105px !important;
+}
+.xt-startup-status {
+  position:absolute !important;
+  left:710px !important;
+  top:666px !important;
+  width:500px !important;
+  margin:0 !important;
+  text-align:center !important;
+  transform:none !important;
+}
+@keyframes xt27-status {
+  from { opacity:0; }
+  to { opacity:1; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .xt-startup-lockup {
+    opacity:1 !important;
+    transform:none !important;
+  }
+  .xt-startup-status {
+    opacity:1 !important;
+    transform:none !important;
+  }
+}
