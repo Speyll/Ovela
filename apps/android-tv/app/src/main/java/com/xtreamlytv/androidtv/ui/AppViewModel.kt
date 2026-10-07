@@ -20,6 +20,7 @@ import com.xtreamlytv.androidtv.model.FavoriteGroupAppearance
 import com.xtreamlytv.androidtv.model.PlaybackProgress
 import com.xtreamlytv.androidtv.model.PlayerRequest
 import com.xtreamlytv.androidtv.model.ProviderSummary
+import com.xtreamlytv.androidtv.model.hiddenCategoryIds
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -99,6 +100,11 @@ data class AppUiState(
     val focusRequest: FocusRequest? = null,
 )
 
+internal fun isCatalogItemHidden(item: CatalogItem, settings: AppSettings): Boolean {
+    val type = if (item.type == ContentType.EPISODE) ContentType.SERIES else item.type
+    return item.categoryId?.let { it in settings.hiddenCategoryIds(type) } == true
+}
+
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val credentialsStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         CredentialsStore(application)
@@ -116,7 +122,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val persistenceMutex = Mutex()
     private val lastFocusByArea = mutableMapOf<String, FocusRequest>()
     private val _state = MutableStateFlow(AppUiState())
-    val state: StateFlow<AppUiState> = _state.asStateFlow()
+val state: StateFlow<AppUiState> = _state.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -305,7 +311,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 _state.update { it.copy(categories = categories, catalogsLoading = false) }
                 val currentScreen = _state.value.screen as? AppScreen.Catalog
                 if (currentScreen != null && _state.value.selectedCategories[currentScreen.type] == null) {
-                    categories[currentScreen.type]?.firstOrNull()?.let { firstCategory ->
+                    categories[currentScreen.type]
+                        ?.firstOrNull { it.id !in _state.value.settings.hiddenCategoryIds(currentScreen.type) }
+                        ?.let { firstCategory ->
                         selectCategory(currentScreen.type, firstCategory)
                     }
                 }
@@ -367,8 +375,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openCatalog(type: ContentType) {
-        val categories = _state.value.categories[type].orEmpty()
-        val selected = _state.value.selectedCategories[type] ?: categories.firstOrNull()
+        val hidden = _state.value.settings.hiddenCategoryIds(type)
+        val categories = _state.value.categories[type].orEmpty().filter { it.id !in hidden }
+        val selected = _state.value.selectedCategories[type]?.takeIf { it.id !in hidden } ?: categories.firstOrNull()
         // Top-menu entry always starts at the category wheel. Remembered poster/EPG
         // focus is intentionally ignored here; selecting a category from the wheel
         // will create the first-item focus request after the category is activated.
@@ -579,7 +588,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun virtualCategoryItems(type: ContentType, categoryId: String): List<CatalogItem> {
         val current = _state.value
-        val base = current.favorites.filter { it.type == type }
+        val base = current.favorites.filter { it.type == type && !isCatalogItemHidden(it, current.settings) }
         val filtered = when {
             categoryId == "__favorites__" -> base
             categoryId.startsWith("__group__:") -> {
@@ -865,6 +874,29 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(settings = normalized, error = null) }
         trimCategoryCache(normalized.maxCachedCategories)
         persist { localStateStore.saveSettings(normalized) }
+    }
+
+    fun setProviderCategoryHidden(type: ContentType, categoryId: String, hidden: Boolean) {
+        if (type == ContentType.EPISODE || categoryId.isBlank() || categoryId.startsWith("__")) return
+        val current = _state.value
+        val ids = current.settings.hiddenCategoryIds(type).toMutableSet().apply {
+            if (hidden) add(categoryId) else remove(categoryId)
+        }
+        val categories = current.settings.hiddenCatalogCategories.toMutableMap().apply {
+            if (ids.isEmpty()) remove(type) else put(type, ids)
+        }
+        val settings = current.settings.copy(hiddenCatalogCategories = categories)
+        val selected = current.selectedCategories[type]
+        val clearSelection = hidden && selected?.id == categoryId
+        _state.update {
+            it.copy(
+                settings = settings,
+                selectedCategories = if (clearSelection) it.selectedCategories - type else it.selectedCategories,
+                items = if (clearSelection && (it.screen as? AppScreen.Catalog)?.type == type) emptyList() else it.items,
+                error = null,
+            )
+        }
+        persist { localStateStore.saveSettings(settings) }
     }
 
     fun clearCatalogCache() {

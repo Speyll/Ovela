@@ -29,7 +29,11 @@ data class AppSettings(
     val streamFormat: StreamFormat = StreamFormat.AUTO,
     val maxCachedCategories: Int = 3,
     val favoriteAutoSort: Boolean = true,
+    val hiddenCatalogCategories: Map<ContentType, Set<String>> = emptyMap(),
 )
+
+fun AppSettings.hiddenCategoryIds(type: ContentType): Set<String> =
+    hiddenCatalogCategories[type].orEmpty()
 
 data class Credentials(
     val server: String,

@@ -33,7 +33,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xtreamlytv.androidtv.BuildConfig
 import com.xtreamlytv.androidtv.model.AppTheme
+import com.xtreamlytv.androidtv.model.ContentType
 import com.xtreamlytv.androidtv.model.StreamFormat
+import com.xtreamlytv.androidtv.model.hiddenCategoryIds
 import com.xtreamlytv.androidtv.ui.theme.palette
 import com.xtreamlytv.androidtv.ui.theme.paletteFor
 import kotlinx.coroutines.delay
@@ -137,6 +139,29 @@ fun SettingsScreen(
             }
         }
 
+        SettingsCard(
+            "Provider category visibility",
+            "Hide provider categories from the app, including adult or XXX groups. Hidden content is removed from category wheels, Home, and Favorites. This local filter is not PIN-protected.",
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    ContentType.LIVE to "Live TV",
+                    ContentType.MOVIE to "Movies",
+                    ContentType.SERIES to "Series",
+                ).forEach { (type, title) ->
+                    CategoryVisibilityColumn(
+                        title = title,
+                        categories = state.categories[type].orEmpty().filter { it.id != "all" && !it.id.startsWith("__") },
+                        hiddenIds = state.settings.hiddenCategoryIds(type),
+                        onVisibilityChange = { id, visible ->
+                            viewModel.setProviderCategoryHidden(type, id, hidden = !visible)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             SettingsCard(
                 title = "Playback compatibility",
@@ -213,6 +238,31 @@ fun SettingsScreen(
                 Text("${state.recent.size} recent items · ${state.progress.size} resume positions", color = palette().muted, fontSize = 9.sp)
                 Spacer(Modifier.height(9.dp))
                 TvButton("Clear watch history", viewModel::clearHistory, Modifier.width(132.dp), TvButtonStyle.Secondary)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryVisibilityColumn(
+    title: String,
+    categories: List<com.xtreamlytv.androidtv.model.Category>,
+    hiddenIds: Set<String>,
+    onVisibilityChange: (String, Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(title, color = palette().text, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        if (categories.isEmpty()) {
+            Text("No provider categories loaded", color = palette().muted, fontSize = 8.5.sp)
+        } else {
+            categories.forEach { category ->
+                val visible = category.id !in hiddenIds
+                SettingChoice(
+                    label = if (visible) category.name else "${category.name} · Hidden",
+                    selected = visible,
+                    onClick = { onVisibilityChange(category.id, !visible) },
+                )
             }
         }
     }

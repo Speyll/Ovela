@@ -67,6 +67,7 @@ import com.xtreamlytv.androidtv.model.CatalogItem
 import com.xtreamlytv.androidtv.model.Category
 import com.xtreamlytv.androidtv.model.ContentType
 import com.xtreamlytv.androidtv.model.EpgProgram
+import com.xtreamlytv.androidtv.model.hiddenCategoryIds
 import com.xtreamlytv.androidtv.ui.theme.palette
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -124,13 +125,17 @@ private fun CatalogLoadingPill(modifier: Modifier = Modifier) {
 }
 
 private fun v07Categories(type: ContentType, state: AppUiState): List<Category> {
-    val favoriteKeys = state.favorites.filter { it.type == type }.map(::itemKey).toSet()
+    val hidden = state.settings.hiddenCategoryIds(type)
+    val favoriteKeys = state.favorites
+        .filter { it.type == type && !isCatalogItemHidden(it, state.settings) }
+        .map(::itemKey)
+        .toSet()
     return buildList {
         add(Category("__favorites__", "♥ Favorites"))
         state.favoriteGroups.filter { group -> group.itemKeys.any { it in favoriteKeys } }.forEach { group ->
             add(Category("__group__:${group.id}", "♡ ${group.name}"))
         }
-        addAll(state.categories[type].orEmpty())
+        addAll(state.categories[type].orEmpty().filter { it.id !in hidden })
     }
 }
 

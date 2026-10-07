@@ -50,7 +50,7 @@ fun HomeScreen(
     contentEntryFocus: FocusRequester,
     topContentPadding: Dp = 0.dp,
 ) {
-    val recent = state.recent.distinctBy(::itemKey)
+    val recent = state.recent.filterNot { isCatalogItemHidden(it, state.settings) }.distinctBy(::itemKey)
     val rawFeatured = recent.firstOrNull()
     val featured = rawFeatured?.let { raw ->
         val rich = state.richItems[itemKey(raw)] ?: raw

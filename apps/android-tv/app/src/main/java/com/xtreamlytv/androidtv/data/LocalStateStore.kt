@@ -50,6 +50,9 @@ class LocalStateStore(context: Context) {
                 streamFormat = StreamFormat.fromId(preferences.getString(KEY_STREAM_FORMAT, null)),
                 maxCachedCategories = preferences.getInt(KEY_CACHE_SIZE, DEFAULT_CACHE_SIZE).coerceIn(2, 5),
                 favoriteAutoSort = preferences.getBoolean(KEY_FAVORITE_AUTO_SORT, true),
+                hiddenCatalogCategories = parseHiddenCatalogCategories(
+                    preferences.getString(KEY_HIDDEN_CATALOG_CATEGORIES, null),
+                ),
             ),
             favorites = parseItems(preferences.getString(KEY_FAVORITES, null)).distinctBy(::itemKey).take(250),
             favoriteGroups = groups,
@@ -73,7 +76,31 @@ class LocalStateStore(context: Context) {
             .putString(KEY_STREAM_FORMAT, settings.streamFormat.id)
             .putInt(KEY_CACHE_SIZE, settings.maxCachedCategories.coerceIn(2, 5))
             .putBoolean(KEY_FAVORITE_AUTO_SORT, settings.favoriteAutoSort)
+            .putString(KEY_HIDDEN_CATALOG_CATEGORIES, hiddenCatalogCategoriesToJson(settings.hiddenCatalogCategories).toString())
             .apply()
+    }
+
+    private fun parseHiddenCatalogCategories(value: String?): Map<ContentType, Set<String>> = runCatching {
+        val root = JSONObject(value ?: return emptyMap())
+        ContentType.entries
+            .filter { it != ContentType.EPISODE }
+            .mapNotNull { type ->
+                val ids = parseStringArray(root.optJSONArray(type.name)?.toString())
+                    .filter { it.isNotBlank() && !it.startsWith("__") }
+                    .toSet()
+                type.takeIf { ids.isNotEmpty() }?.let { it to ids }
+            }
+            .toMap()
+    }.getOrDefault(emptyMap())
+
+    private fun hiddenCatalogCategoriesToJson(categories: Map<ContentType, Set<String>>): JSONObject {
+        val root = JSONObject()
+        categories.forEach { (type, ids) ->
+            if (type != ContentType.EPISODE && ids.isNotEmpty()) {
+                root.put(type.name, JSONArray(ids.filter { it.isNotBlank() && !it.startsWith("__") }.sorted()))
+            }
+        }
+        return root
     }
 
     fun saveFavorites(items: List<CatalogItem>) {
@@ -369,6 +396,7 @@ class LocalStateStore(context: Context) {
         const val KEY_STREAM_FORMAT = "settings.streamFormat"
         const val KEY_CACHE_SIZE = "settings.maxCachedCategories"
         const val KEY_FAVORITE_AUTO_SORT = "settings.favoriteAutoSort"
+        const val KEY_HIDDEN_CATALOG_CATEGORIES = "settings.hiddenCatalogCategories"
         const val KEY_FAVORITES = "favorites"
         const val KEY_GROUPS = "favoriteGroups"
         const val KEY_GROUP_ORDER = "favoriteGroupOrder"
