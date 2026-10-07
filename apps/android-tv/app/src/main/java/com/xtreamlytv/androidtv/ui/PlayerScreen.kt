@@ -53,8 +53,11 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.common.audio.AudioProcessor
+import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -63,6 +66,9 @@ import com.xtreamlytv.androidtv.model.ContentType
 import com.xtreamlytv.androidtv.model.PlayerRequest
 import com.xtreamlytv.androidtv.ui.theme.palette
 import kotlinx.coroutines.delay
+import java.nio.ByteBuffer
+
+private const val VOD_AUDIO_ADVANCE_MS = 100
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
@@ -353,8 +359,47 @@ private fun pcmVodRenderersFactory(context: Context): DefaultRenderersFactory =
             // Media3 can keep audio on the same clock as rendered video.
             .setEnableFloatOutput(enableFloatOutput)
             .setEnableAudioTrackPlaybackParams(enableAudioOutputPlaybackParams)
+            .setAudioProcessors(arrayOf(VodAudioAdvanceProcessor(VOD_AUDIO_ADVANCE_MS)))
             .build()
     }
+
+/**
+ * Advances decoded VOD audio to counter the excess delay added by the TV's
+ * video-processing compensation path. Dropping PCM only at each new stream
+ * keeps the correction stable without changing playback speed or Live TV.
+ */
+private class VodAudioAdvanceProcessor(
+    private val advanceMs: Int,
+) : BaseAudioProcessor() {
+    private var bytesToSkip = 0
+
+    override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
+        if (!Util.isEncodingLinearPcm(inputAudioFormat.encoding)) {
+            throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
+        }
+        return inputAudioFormat
+    }
+
+    override fun onFlush() {
+        val framesToSkip = inputAudioFormat.sampleRate.toLong() * advanceMs / 1_000L
+        bytesToSkip = (framesToSkip * inputAudioFormat.bytesPerFrame)
+            .coerceAtMost(Int.MAX_VALUE.toLong())
+            .toInt()
+    }
+
+    override fun queueInput(inputBuffer: ByteBuffer) {
+        val skippedBytes = minOf(inputBuffer.remaining(), bytesToSkip)
+        inputBuffer.position(inputBuffer.position() + skippedBytes)
+        bytesToSkip -= skippedBytes
+
+        if (inputBuffer.hasRemaining()) {
+            replaceOutputBuffer(inputBuffer.remaining()).apply {
+                put(inputBuffer)
+                flip()
+            }
+        }
+    }
+}
 
 @Composable
 private fun PlaybackOptions(
