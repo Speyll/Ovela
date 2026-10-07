@@ -30,6 +30,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xtreamlytv.androidtv.R
@@ -47,6 +48,7 @@ fun HomeScreen(
     state: AppUiState,
     viewModel: AppViewModel,
     contentEntryFocus: FocusRequester,
+    topContentPadding: Dp = 0.dp,
 ) {
     val recent = state.recent.distinctBy(::itemKey)
     val rawFeatured = recent.firstOrNull()
@@ -124,42 +126,48 @@ fun HomeScreen(
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
-        HomeHero(
-            featured = featured,
-            actionItem = rawFeatured,
-            // Never upscale poster/cover art into a backdrop. Live TV always uses
-            // the exact bundled TV-wall image from the webOS RC; Movie/Series use
-            // only provider backdrop artwork and otherwise fall through to the app background.
-            backdropUrl = if (featured?.type == ContentType.LIVE) null else paintedHeroBackdrop ?: featured?.backdropUrl,
-            viewModel = viewModel,
-            primaryFocus = heroPlayFocus,
-            downFocus = firstRailFocus.takeIf { rails.isNotEmpty() },
+    val homeBackdrop = if (featured?.type == ContentType.LIVE) null else paintedHeroBackdrop ?: featured?.backdropUrl
+    Box(Modifier.fillMaxSize()) {
+        HeroBackdrop(
+            url = homeBackdrop,
+            fallbackDrawable = R.drawable.home_live_backdrop,
+            modifier = Modifier.fillMaxSize(),
+            imageAlpha = .48f,
+            aggressiveBottomVignette = true,
         )
-        Spacer(Modifier.height(4.dp))
-        LazyColumn(
-            state = scrollState,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            contentPadding = PaddingValues(top = 4.dp, bottom = 64.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            itemsIndexed(rails, key = { _, rail -> rail.scope }) { rowIndex, rail ->
-                HomeContentRail(
-                    spec = rail,
-                    state = state,
-                    viewModel = viewModel,
-                    firstItemFocus = firstRailFocus.takeIf { rowIndex == 0 },
-                    focusRequest = returnFocus?.takeIf { it.scope == rail.scope },
-                    onRowFocused = {
-                        // The hero remains fixed. Only move the lower list when focus
-                        // enters a different rail; horizontal poster movement must not
-                        // repeatedly re-scroll the page and make it jump vertically.
-                        if (rowIndex >= 0 && rowIndex != lastFocusedRailIndex) {
-                            lastFocusedRailIndex = rowIndex
-                            scrollScope.launch { scrollState.animateScrollToItem(rowIndex) }
-                        }
-                    },
-                )
+        Column(Modifier.fillMaxSize().padding(top = topContentPadding)) {
+            HomeHero(
+                featured = featured,
+                actionItem = rawFeatured,
+                viewModel = viewModel,
+                primaryFocus = heroPlayFocus,
+                downFocus = firstRailFocus.takeIf { rails.isNotEmpty() },
+            )
+            Spacer(Modifier.height(4.dp))
+            LazyColumn(
+                state = scrollState,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentPadding = PaddingValues(top = 4.dp, bottom = 64.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                itemsIndexed(rails, key = { _, rail -> rail.scope }) { rowIndex, rail ->
+                    HomeContentRail(
+                        spec = rail,
+                        state = state,
+                        viewModel = viewModel,
+                        firstItemFocus = firstRailFocus.takeIf { rowIndex == 0 },
+                        focusRequest = returnFocus?.takeIf { it.scope == rail.scope },
+                        onRowFocused = {
+                            // The hero remains fixed. Only move the lower list when focus
+                            // enters a different rail; horizontal poster movement must not
+                            // repeatedly re-scroll the page and make it jump vertically.
+                            if (rowIndex >= 0 && rowIndex != lastFocusedRailIndex) {
+                                lastFocusedRailIndex = rowIndex
+                                scrollScope.launch { scrollState.animateScrollToItem(rowIndex) }
+                            }
+                        },
+                    )
+                }
             }
         }
     }
@@ -177,7 +185,6 @@ private data class HomeRailSpec(
 private fun HomeHero(
     featured: CatalogItem?,
     actionItem: CatalogItem?,
-    backdropUrl: String?,
     viewModel: AppViewModel,
     primaryFocus: FocusRequester,
     downFocus: FocusRequester?,
@@ -193,13 +200,6 @@ private fun HomeHero(
     }
 
     Box(Modifier.fillMaxWidth().height(194.dp)) {
-        HeroBackdrop(
-            url = if (isLive) null else backdropUrl,
-            fallbackDrawable = if (isLive) R.drawable.home_live_backdrop else null,
-            modifier = Modifier.fillMaxSize(),
-            imageAlpha = if (isLive) .42f else .46f,
-            aggressiveBottomVignette = true,
-        )
         Row(
             Modifier.fillMaxSize().padding(start = 16.dp, end = 22.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,

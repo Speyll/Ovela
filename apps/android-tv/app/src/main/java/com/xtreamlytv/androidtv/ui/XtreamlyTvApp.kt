@@ -108,6 +108,9 @@ private fun AppShell(state: AppUiState, viewModel: AppViewModel) {
     val section = state.screen.section()
     val activeNavFocus = remember(section) { FocusRequester() }
     val catalogScreen = state.screen as? AppScreen.Catalog
+    val usesFullCanvasBackdrop = state.screen == AppScreen.Home ||
+        (catalogScreen != null && catalogScreen.type != ContentType.LIVE)
+    val topNavHeight = 60.dp
 
     BackHandler(enabled = searchOpen) { searchOpen = false }
     BackHandler(enabled = !searchOpen && state.screen != AppScreen.Home && state.screen != AppScreen.Login) { viewModel.back() }
@@ -132,7 +135,39 @@ private fun AppShell(state: AppUiState, viewModel: AppViewModel) {
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .then(if (usesFullCanvasBackdrop) Modifier else Modifier.padding(top = topNavHeight)),
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                state.error?.let {
+                    ErrorBanner(it, viewModel::clearError)
+                    Spacer(Modifier.height(8.dp))
+                }
+                Box(Modifier.fillMaxWidth().weight(1f)) {
+                    when (val screen = state.screen) {
+                        AppScreen.Home -> HomeScreen(state, viewModel, contentEntryFocus, topNavHeight)
+                        is AppScreen.Catalog -> CatalogScreen(
+                            screen.type,
+                            state,
+                            viewModel,
+                            contentEntryFocus,
+                            activeNavFocus,
+                            if (screen.type == ContentType.LIVE) 0.dp else topNavHeight,
+                        )
+                        is AppScreen.Detail -> DetailScreen(screen.item, state, viewModel, contentEntryFocus)
+                        AppScreen.Favorites -> StableFavoritesScreen("all", state, viewModel)
+                        is AppScreen.FavoriteGroupBrowser -> StableFavoritesScreen(screen.groupId, state, viewModel)
+                        AppScreen.FavoriteGroupsManager -> StableFavoriteGroupsManagerScreen(state, viewModel)
+                        is AppScreen.FavoriteGroupEditor -> FavoriteGroupEditorScreen(screen.groupId, state, viewModel)
+                        AppScreen.Settings -> SettingsScreen(state, viewModel, contentEntryFocus)
+                        else -> Unit
+                    }
+                }
+            }
+        }
         MainTopNav(
             section = section,
             showSearch = catalogScreen != null,
@@ -145,31 +180,6 @@ private fun AppShell(state: AppUiState, viewModel: AppViewModel) {
             onSearch = { searchOpen = true },
             onSettings = viewModel::openSettings,
         )
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .weight(1f),
-        ) {
-            Column(Modifier.fillMaxSize()) {
-                state.error?.let {
-                    ErrorBanner(it, viewModel::clearError)
-                    Spacer(Modifier.height(8.dp))
-                }
-                Box(Modifier.fillMaxWidth().weight(1f)) {
-                    when (val screen = state.screen) {
-                        AppScreen.Home -> HomeScreen(state, viewModel, contentEntryFocus)
-                        is AppScreen.Catalog -> CatalogScreen(screen.type, state, viewModel, contentEntryFocus, activeNavFocus)
-                        is AppScreen.Detail -> DetailScreen(screen.item, state, viewModel, contentEntryFocus)
-                        AppScreen.Favorites -> StableFavoritesScreen("all", state, viewModel)
-                        is AppScreen.FavoriteGroupBrowser -> StableFavoritesScreen(screen.groupId, state, viewModel)
-                        AppScreen.FavoriteGroupsManager -> StableFavoriteGroupsManagerScreen(state, viewModel)
-                        is AppScreen.FavoriteGroupEditor -> FavoriteGroupEditorScreen(screen.groupId, state, viewModel)
-                        AppScreen.Settings -> SettingsScreen(state, viewModel, contentEntryFocus)
-                        else -> Unit
-                    }
-                }
-            }
-        }
     }
 
     if (searchOpen && catalogScreen != null) {

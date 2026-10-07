@@ -84,12 +84,13 @@ fun CatalogScreen(
     viewModel: AppViewModel,
     contentEntryFocus: FocusRequester,
     navReturnFocus: FocusRequester,
+    topContentPadding: Dp = 0.dp,
 ) {
     Box(Modifier.fillMaxSize()) {
         if (type == ContentType.LIVE) {
             LiveGuideScreen(state, viewModel, contentEntryFocus, navReturnFocus)
         } else {
-            MediaCatalogScreen(type, state, viewModel, contentEntryFocus, navReturnFocus)
+            MediaCatalogScreen(type, state, viewModel, contentEntryFocus, navReturnFocus, topContentPadding)
         }
 
         if (state.loading) {
@@ -355,6 +356,7 @@ private fun MediaCatalogScreen(
     viewModel: AppViewModel,
     contentEntryFocus: FocusRequester,
     navReturnFocus: FocusRequester,
+    topContentPadding: Dp,
 ) {
     val query = state.searchQuery.trim()
     val items = remember(state.items, query) {
@@ -456,7 +458,7 @@ private fun MediaCatalogScreen(
                 imageAlpha = .48f,
             )
         }
-        Row(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxSize().padding(top = topContentPadding)) {
             CategoryWheel(
                 type = type,
                 state = state,
