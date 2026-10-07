@@ -1440,6 +1440,7 @@ function mediaWindow(kind, items, index) {
 function ensureRootMediaBackdrop(kind) {
   var app = document.getElementById('app');
   if (!app) return null;
+  app.classList.toggle('v07-canvas-art', kind === 'home' || kind === 'movies' || kind === 'series');
 
   var host = document.getElementById('v07RootMediaBackdrop');
   if (!host) {
@@ -1459,6 +1460,8 @@ function ensureRootMediaBackdrop(kind) {
 }
 
 function hideRootMediaBackdrop() {
+  var app = document.getElementById('app');
+  if (app) app.classList.remove('v07-canvas-art');
   var host = document.getElementById('v07RootMediaBackdrop');
   if (!host) return;
   host.classList.remove('is-active');

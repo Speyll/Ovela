@@ -6898,3 +6898,30 @@
   from { transform:translateY(0); }
   to { transform:translateY(calc(-1 * var(--v07-marquee-distance, 0px))); }
 }
+
+/* Main browse pages share a full-screen image and uniform readability tint. */
+.v07-canvas-art .sidebar,
+.v07-canvas-art .topbar {
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+}
+.v07-canvas-art #v07RootMediaBackdrop::before {
+  display:none !important;
+}
+.v07-canvas-art #v07RootMediaBackdrop .v07-root-media-backdrop-layer {
+  top:0 !important;
+  right:0 !important;
+  bottom:0 !important;
+  left:0 !important;
+  background-position:center center !important;
+  background-size:cover !important;
+  transform:none !important;
+  filter:saturate(.85) !important;
+}
+.v07-canvas-art #v07RootMediaBackdrop .v07-root-media-backdrop-layer.is-visible {
+  opacity:1 !important;
+}
+.v07-canvas-art #v07RootMediaBackdrop .v07-root-media-backdrop-scrim {
+  background:rgba(3,7,12,.66) !important;
+}
