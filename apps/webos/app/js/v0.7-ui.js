@@ -1492,16 +1492,28 @@ function setRootCanvasBackdrop(kind, url) {
     return;
   }
 
-  var image = new Image();
-  image.onload = function () {
-    if (host.getAttribute('data-backdrop-request') !== url) return;
-    V.artworkPreload[url] = 'ready';
+  function showBackdrop() {
     primary.style.backgroundImage = 'url(' + JSON.stringify(url) + ')';
     primary.classList.add('is-visible');
     host.classList.add('has-art');
     host.classList.add('is-active');
     host.setAttribute('data-backdrop-url', url);
     host.setAttribute('data-media-kind', kind || '');
+  }
+
+  // Packaged app artwork is trusted and local. Paint it immediately instead
+  // of waiting for Image.onload, which some webOS builds do not reliably fire
+  // for off-DOM image instances.
+  if (!/^https?:\/\//i.test(url)) {
+    showBackdrop();
+    return;
+  }
+
+  var image = new Image();
+  image.onload = function () {
+    if (host.getAttribute('data-backdrop-request') !== url) return;
+    V.artworkPreload[url] = 'ready';
+    showBackdrop();
   };
   image.onerror = function () {
     if (host.getAttribute('data-backdrop-request') !== url) return;
