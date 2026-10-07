@@ -2401,9 +2401,10 @@ function updateMediaCatalog(kind) {
 
   function hydrateHomeFeatured(featured, featuredType) {
     if (!featured) return;
+    var home = document.querySelector('.v07-home');
     if (featuredType === 'movie') {
       getMovieRich(featured).then(function (rich) {
-        if (App.currentView !== 'home') return;
+        if (App.currentView !== 'home' || document.querySelector('.v07-home') !== home) return;
         applyHomeHeroArtwork(featured, featuredType, rich);
       });
       return;

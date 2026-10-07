@@ -6722,7 +6722,7 @@
   opacity:.29 !important;
 }
 #v07RootMediaBackdrop[data-media-kind="home"] .v07-root-media-backdrop-layer.is-visible {
-  opacity:.25 !important;
+  opacity:.29 !important;
 }
 #v07RootMediaBackdrop[data-media-kind="series-detail"] .v07-root-media-backdrop-layer.is-visible {
   opacity:.27 !important;
@@ -6747,7 +6747,7 @@
    subtle transition into the artwork. Left-side shaping improves hero-copy and
    wheel readability without turning the whole page muddy. */
 #v07RootMediaBackdrop .v07-root-media-backdrop-scrim {
-  background:
+  --v07-shared-scrim:
     linear-gradient(180deg,
       rgba(1,2,4,.985) 0%,
       rgba(1,2,4,.965) 12%,
@@ -6772,32 +6772,13 @@
       rgba(1,2,4,.34) 24%,
       rgba(1,2,4,.14) 38%,
       rgba(1,2,4,0) 54%),
-    linear-gradient(rgba(1,2,4,.06), rgba(1,2,4,.06)) !important;
+    linear-gradient(rgba(1,2,4,.06), rgba(1,2,4,.06));
+  background:var(--v07-shared-scrim) !important;
 }
 
-/* Home matches Android more closely with a stronger lower vignette so the hero
-   art yields to the continue-watching rails. */
+/* Home uses exactly the same vignette as Movies and Series. */
 #v07RootMediaBackdrop[data-media-kind="home"] .v07-root-media-backdrop-scrim {
-  background:
-    linear-gradient(180deg,
-      rgba(1,2,4,.985) 0%,
-      rgba(1,2,4,.965) 14%,
-      rgba(1,2,4,.90) 28%,
-      rgba(1,2,4,.76) 44%,
-      rgba(1,2,4,.56) 58%,
-      rgba(1,2,4,.38) 70%,
-      rgba(1,2,4,.30) 78%,
-      rgba(1,2,4,.40) 86%,
-      rgba(1,2,4,.58) 93%,
-      rgba(1,2,4,.76) 100%),
-    linear-gradient(90deg,
-      rgba(1,2,4,.88) 0%,
-      rgba(1,2,4,.76) 16%,
-      rgba(1,2,4,.58) 33%,
-      rgba(1,2,4,.37) 51%,
-      rgba(1,2,4,.19) 71%,
-      rgba(1,2,4,.09) 100%),
-    linear-gradient(rgba(1,2,4,.05), rgba(1,2,4,.05)) !important;
+  background:var(--v07-shared-scrim) !important;
 }
 
 /* Series detail needs the same visual family as Movies / Series browse pages. */

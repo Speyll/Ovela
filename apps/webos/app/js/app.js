@@ -2601,6 +2601,8 @@
       this.playerReturnState = null;
       if (returnState && document.querySelector('.shell')) {
         this.prepareNavigationState(returnState);
+        // Playback updates recents while the underlying Home DOM is retained.
+        if (this.currentView === 'home' && !this.detail) this.renderHome();
         this.queueNavigationRestore(returnState);
       } else this.renderShell(this.currentView, returnState);
     },
