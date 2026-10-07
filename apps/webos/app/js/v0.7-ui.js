@@ -2119,6 +2119,9 @@ function updateMediaCatalog(kind) {
     var items = App.currentFilteredItems.live || [];
     var host = document.getElementById('v07GuideRows');
     if (!host) return;
+    var activeElement = document.activeElement;
+    var restoreIndex = activeElement && host.contains(activeElement) && activeElement.hasAttribute('data-v07-live-index')
+      ? Number(activeElement.dataset.v07LiveIndex) : null;
     if (!items.length) {
       host.innerHTML = '<div class="v07-empty"><strong>No channels</strong><span>Try another category or change the search.</span></div>';
       return;
@@ -2152,8 +2155,9 @@ function updateMediaCatalog(kind) {
     });
 
     if (window.XtreamlyTVNavigation) XtreamlyTVNavigation.invalidate();
-    if (focus) {
-      var target = host.querySelector('[data-v07-live-index="' + V.liveIndex + '"]');
+    if (focus || restoreIndex !== null) {
+      var targetIndex = focus ? V.liveIndex : restoreIndex;
+      var target = host.querySelector('[data-v07-live-index="' + targetIndex + '"]');
       if (target) target.focus();
     }
   }
