@@ -6860,35 +6860,32 @@
   overflow:hidden;
 }
 .v07-station-copy strong {
+  position:relative;
+  display:block !important;
+  height:42px;
   max-height:42px;
   font-size:17px !important;
   line-height:21px !important;
   white-space:normal !important;
   overflow:hidden;
-  display:-webkit-box !important;
-  -webkit-box-orient:vertical;
-  -webkit-line-clamp:2;
-  text-overflow:ellipsis;
+  text-overflow:clip;
+}
+.v07-station-copy strong > span {
+  display:block;
+  will-change:transform;
 }
 .v07-station-copy span {
   margin-top:2px !important;
   font-size:12px !important;
   line-height:14px !important;
 }
-.v07-station-copy strong.is-marquee-probe,
 .v07-station-copy strong.is-overflowing {
-  display:block !important;
-  max-height:none;
-  white-space:nowrap !important;
-  text-overflow:clip;
-  -webkit-line-clamp:unset;
+  animation:none;
 }
-.v07-station-copy strong.is-overflowing {
-  width:max-content;
-  min-width:100%;
-  animation:v07-channel-name-marquee var(--v07-marquee-duration, 12s) linear 1.2s infinite alternate;
+.v07-station-copy strong.is-overflowing > span {
+  animation:v07-channel-name-marquee var(--v07-marquee-duration, 4s) linear .7s infinite alternate;
 }
 @keyframes v07-channel-name-marquee {
-  from { transform:translateX(0); }
-  to { transform:translateX(calc(-1 * var(--v07-marquee-distance, 0px))); }
+  from { transform:translateY(0); }
+  to { transform:translateY(calc(-1 * var(--v07-marquee-distance, 0px))); }
 }

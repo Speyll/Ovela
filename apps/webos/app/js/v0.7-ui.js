@@ -348,10 +348,10 @@
     }, 6500);
   }
 
-  function logoHtml(item) {
+  function logoHtml(item, eager) {
     var image = imageOf(item, 'live');
     return '<div class="v07-station-logo">' +
-      (image ? '<img data-channel-art="true" src="' + esc(image) + '" alt="" loading="lazy" decoding="async" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'grid\'">' : '') +
+      (image ? '<img data-channel-art="true" src="' + esc(image) + '" alt="" loading="' + (eager ? 'eager' : 'lazy') + '" decoding="' + (eager ? 'sync' : 'async') + '" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'grid\'">' : '') +
       '<span' + (image ? ' style="display:none"' : '') + '>' + esc(initials(titleOf(item))) + '</span></div>';
   }
 
@@ -2089,8 +2089,8 @@ function updateMediaCatalog(kind) {
     var favorite = Store.isFavorite && Store.isFavorite('live', id);
     return '<div class="v07-guide-row">' +
       '<button class="v07-station focusable" data-v07-live-index="' + index + '" data-content-type="live" data-content-id="' + esc(id) + '">' +
-        logoHtml(item) +
-        '<div class="v07-station-copy"><strong>' + esc(titleOf(item)) + '</strong><span>' + (favorite ? '♥ Favorite' : 'CH ' + esc(item.num || '—')) + '</span></div>' +
+        logoHtml(item, true) +
+        '<div class="v07-station-copy"><strong><span>' + esc(titleOf(item)) + '</span></strong><span>' + (favorite ? '♥ Favorite' : 'CH ' + esc(item.num || '—')) + '</span></div>' +
       '</button>' +
       '<div class="v07-program-track" data-v07-epg-id="' + esc(id) + '"><div class="v07-guide-loading"></div></div>' +
     '</div>';
@@ -2098,19 +2098,18 @@ function updateMediaCatalog(kind) {
 
   function updateStationMarquee(button, enabled) {
     var label = button && button.querySelector('.v07-station-copy strong');
-    if (!label) return;
-    label.classList.remove('is-overflowing', 'is-marquee-probe');
+    var text = label && label.querySelector('span');
+    if (!label || !text) return;
+    label.classList.remove('is-overflowing');
     label.style.removeProperty('--v07-marquee-distance');
     label.style.removeProperty('--v07-marquee-duration');
     if (!enabled) return;
-    label.classList.add('is-marquee-probe');
     requestAnimationFrame(function () {
-      if (!button.matches(':focus')) return label.classList.remove('is-marquee-probe');
-      var distance = Math.max(0, label.scrollWidth - label.clientWidth);
-      label.classList.remove('is-marquee-probe');
+      if (!button.matches(':focus')) return;
+      var distance = Math.max(0, text.scrollHeight - label.clientHeight);
       if (distance > 1) {
         label.style.setProperty('--v07-marquee-distance', distance + 'px');
-        label.style.setProperty('--v07-marquee-duration', Math.max(8, distance / 18) + 's');
+        label.style.setProperty('--v07-marquee-duration', Math.max(4, distance / 28) + 's');
         label.classList.add('is-overflowing');
       }
     });
