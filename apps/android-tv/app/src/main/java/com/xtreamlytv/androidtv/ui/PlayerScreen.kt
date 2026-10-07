@@ -68,7 +68,7 @@ import com.xtreamlytv.androidtv.ui.theme.palette
 import kotlinx.coroutines.delay
 import java.nio.ByteBuffer
 
-private const val VOD_AUDIO_ADVANCE_MS = 250
+private const val VOD_AUDIO_ADVANCE_MS = 280
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
