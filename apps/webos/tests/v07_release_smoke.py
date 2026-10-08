@@ -63,6 +63,53 @@ def main() -> None:
         assert marquee["overflowing"] is True
         assert marquee["animation"] == "v07-channel-name-marquee"
 
+        # A transient MPEG-TS error reconnects the same channel once before
+        # advancing to the alternate format or presenting a terminal error.
+        reconnect = page.evaluate("""async () => {
+          const app = XtreamlyTVApp;
+          const originalLoad = app.loadPlaybackCandidate;
+          const originalToast = app.toast;
+          const originalLoading = app.showPlayerLoading;
+          const loaded = [];
+          app.playerOpen = true;
+          app.playerType = 'live';
+          app.playerMedia = {stream_id: 1001};
+          app.playbackCandidates = [
+            {format:'ts', label:'MPEG-TS', url:'https://demo.invalid/live.ts'},
+            {format:'m3u8', label:'HLS', url:'https://demo.invalid/live.m3u8'}
+          ];
+          app.playbackCandidateIndex = 0;
+          app.playbackCandidateRetries = {};
+          app.playbackFailureLock = false;
+          app.loadPlaybackCandidate = (index, message) => {
+            loaded.push({index, message});
+            app.playbackCandidateIndex = index;
+            app.playbackFailureLock = false;
+          };
+          app.toast = () => {};
+          app.showPlayerLoading = () => {};
+          app.tryNextPlaybackCandidate('The current stream format failed.');
+          await new Promise(resolve => setTimeout(resolve, 700));
+          const first = {loaded:loaded.slice(), retries:app.playbackCandidateRetries[0]};
+          app.tryNextPlaybackCandidate('The current stream format failed.');
+          const result = {first, loaded:loaded.slice()};
+          clearTimeout(app.playbackRetryTimer);
+          app.loadPlaybackCandidate = originalLoad;
+          app.toast = originalToast;
+          app.showPlayerLoading = originalLoading;
+          app.playerOpen = false;
+          app.playerMedia = null;
+          app.playbackCandidates = [];
+          app.playbackCandidateRetries = {};
+          app.playbackFailureLock = false;
+          return result;
+        }""")
+        assert reconnect["first"] == {
+            "loaded": [{"index": 0, "message": "Reconnecting stream…"}],
+            "retries": 1,
+        }
+        assert reconnect["loaded"][-1]["index"] == 1
+
         page.evaluate("XtreamlyTVApp.activeCategory.movies='102'; XtreamlyTVApp.renderShell('movies')")
         page.wait_for_selector("[data-v07-media-index]")
         assert page.locator("[data-v07-media-index]").count() <= 6

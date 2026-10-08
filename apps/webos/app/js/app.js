@@ -190,6 +190,8 @@
     playerParent: null,
     playbackCandidates: [],
     playbackCandidateIndex: 0,
+    playbackCandidateRetries: {},
+    playbackRetryTimer: null,
     playbackWatchdog: null,
     playbackBufferTimer: null,
     playbackStartedAt: 0,
@@ -2104,6 +2106,8 @@
       this.playerParent = parent || null;
       this.playbackCandidates = this.buildPlaybackCandidates(item, type);
       this.playbackCandidateIndex = 0;
+      this.playbackCandidateRetries = {};
+      this.playbackRetryTimer = null;
       this.playbackProgressRestored = type === 'live';
       this.playbackResumeTarget = null;
       this.playbackResumeAttempts = 0;
@@ -2242,6 +2246,8 @@
         return;
       }
       clearTimeout(this.playbackWatchdog);
+      clearTimeout(this.playbackRetryTimer);
+      this.playbackRetryTimer = null;
       clearTimeout(this.playbackResumeTimer);
       this.playbackResumeTimer = null;
       this.playbackResumeAttempts = 0;
@@ -2261,7 +2267,10 @@
         video.removeAttribute('src');
         while (video.firstChild) video.removeChild(video.firstChild);
         var source = document.createElement('source');
-        source.src = candidate.url;
+        var retryCount = Number((this.playbackCandidateRetries || {})[index] || 0);
+        source.src = retryCount > 0
+          ? candidate.url + (candidate.url.indexOf('?') >= 0 ? '&' : '?') + '_xtv_retry=' + Date.now()
+          : candidate.url;
         if (candidate.mime) source.type = candidate.mime;
         video.appendChild(source);
         video.load();
@@ -2345,6 +2354,24 @@
       if (!this.playerOpen || this.playbackFailureLock) return;
       this.playbackFailureLock = true;
       this.playbackSwitching = false;
+      var current = this.playbackCandidates[this.playbackCandidateIndex];
+      var retries = this.playbackCandidateRetries || (this.playbackCandidateRetries = {});
+      var retryCount = Number(retries[this.playbackCandidateIndex] || 0);
+      if (this.playerType === 'live' && current && current.format === 'ts' && retryCount < 1) {
+        var self = this;
+        var retryIndex = this.playbackCandidateIndex;
+        var retryMedia = this.playerMedia;
+        retries[retryIndex] = retryCount + 1;
+        this.toast(reason + ' Reconnecting MPEG-TS…');
+        this.showPlayerLoading('Reconnecting stream…', current.label);
+        clearTimeout(this.playbackRetryTimer);
+        this.playbackRetryTimer = setTimeout(function () {
+          self.playbackRetryTimer = null;
+          if (!self.playerOpen || self.playerMedia !== retryMedia || self.playbackCandidateIndex !== retryIndex) return;
+          self.loadPlaybackCandidate(retryIndex, 'Reconnecting stream…');
+        }, 650);
+        return;
+      }
       var next = this.playbackCandidateIndex + 1;
       if (next < this.playbackCandidates.length) {
         this.toast(reason + ' Trying ' + this.playbackCandidates[next].label + '…');
@@ -2567,8 +2594,10 @@
       clearTimeout(this.playbackWatchdog);
       clearTimeout(this.playbackBufferTimer);
       clearTimeout(this.playbackResumeTimer);
+      clearTimeout(this.playbackRetryTimer);
       this.playbackBufferTimer = null;
       this.playbackResumeTimer = null;
+      this.playbackRetryTimer = null;
       var video = document.getElementById('video');
       if (video) {
         if (this.playerType !== 'live' && isFinite(video.currentTime) &&
@@ -2594,6 +2623,7 @@
       this.playerList = [];
       this.playerParent = null;
       this.playbackCandidates = [];
+      this.playbackCandidateRetries = {};
       this.playerHasPlayed = false;
       this.lastPlaybackToggleAt = 0;
       this.state = XtreamlyTVStore.getState();
@@ -2623,6 +2653,9 @@
       this.playerMedia = next;
       this.playbackCandidates = this.buildPlaybackCandidates(next, 'live');
       this.playbackCandidateIndex = 0;
+      this.playbackCandidateRetries = {};
+      clearTimeout(this.playbackRetryTimer);
+      this.playbackRetryTimer = null;
       this.playbackProgressRestored = false;
       XtreamlyTVStore.addRecent(next, 'live');
       var title = document.getElementById('playerTitle');
