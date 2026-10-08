@@ -6849,32 +6849,35 @@
 /* Give provider channel names room without changing the category wheel. */
 .v07-guide-header,
 .v07-guide-row {
-  grid-template-columns:300px minmax(0,1fr) !important;
+  grid-template-columns:340px minmax(0,1fr) !important;
 }
 .v07-station {
-  padding:0 12px !important;
+  padding:0 14px !important;
 }
 .v07-station-logo {
-  flex-basis:52px !important;
-  width:52px !important;
-  height:52px !important;
-  border-radius:13px !important;
+  flex-basis:68px !important;
+  width:68px !important;
+  height:68px !important;
+  border-radius:17px !important;
 }
 .v07-station-logo img {
-  width:44px !important;
-  height:44px !important;
+  width:58px !important;
+  height:58px !important;
+}
+.v07-station-logo span {
+  font-size:22px !important;
 }
 .v07-station-copy {
-  margin-left:10px !important;
+  margin-left:14px !important;
   overflow:hidden;
 }
 .v07-station-copy strong {
   position:relative;
   display:block !important;
-  height:42px;
-  max-height:42px;
-  font-size:17px !important;
-  line-height:21px !important;
+  height:48px;
+  max-height:48px;
+  font-size:20px !important;
+  line-height:24px !important;
   white-space:normal !important;
   overflow:hidden;
   text-overflow:clip;
@@ -6884,9 +6887,9 @@
   will-change:transform;
 }
 .v07-station-copy span {
-  margin-top:2px !important;
-  font-size:12px !important;
-  line-height:14px !important;
+  margin-top:4px !important;
+  font-size:14px !important;
+  line-height:16px !important;
 }
 .v07-station-copy strong.is-overflowing {
   animation:none;

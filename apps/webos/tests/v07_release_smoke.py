@@ -41,6 +41,28 @@ def main() -> None:
         page.wait_for_selector("[data-v07-live-index]")
         assert page.locator("[data-v07-live-index]").count() <= 5
 
+        # Channel names keep a two-line viewport and marquee only when focused.
+        marquee = page.evaluate("""async () => {
+          const button = document.querySelector('[data-v07-live-index]');
+          const label = button.querySelector('.v07-station-copy strong');
+          label.querySelector('span').textContent =
+            'Metro News International Regional Network Extended Channel Name ' +
+            'Metro News International Regional Network Extended Channel Name';
+          button.blur();
+          button.focus();
+          await new Promise(resolve => setTimeout(resolve, 100));
+          const style = getComputedStyle(label);
+          return {
+            height: label.clientHeight,
+            lineHeight: parseFloat(style.lineHeight),
+            overflowing: label.classList.contains('is-overflowing'),
+            animation: getComputedStyle(label.querySelector('span')).animationName
+          };
+        }""")
+        assert abs(marquee["height"] - marquee["lineHeight"] * 2) <= 1
+        assert marquee["overflowing"] is True
+        assert marquee["animation"] == "v07-channel-name-marquee"
+
         page.evaluate("XtreamlyTVApp.activeCategory.movies='102'; XtreamlyTVApp.renderShell('movies')")
         page.wait_for_selector("[data-v07-media-index]")
         assert page.locator("[data-v07-media-index]").count() <= 6
