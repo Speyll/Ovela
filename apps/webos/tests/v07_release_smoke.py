@@ -63,8 +63,8 @@ def main() -> None:
         assert marquee["overflowing"] is True
         assert marquee["animation"] == "v07-channel-name-marquee"
 
-        # A transient MPEG-TS error reconnects the same channel once before
-        # advancing to the alternate format or presenting a terminal error.
+        # A transient HLS or MPEG-TS error reconnects the same format once
+        # before advancing to the alternate or presenting a terminal error.
         reconnect = page.evaluate("""async () => {
           const app = XtreamlyTVApp;
           const originalLoad = app.loadPlaybackCandidate;
@@ -75,8 +75,8 @@ def main() -> None:
           app.playerType = 'live';
           app.playerMedia = {stream_id: 1001};
           app.playbackCandidates = [
-            {format:'ts', label:'MPEG-TS', url:'https://demo.invalid/live.ts'},
-            {format:'m3u8', label:'HLS', url:'https://demo.invalid/live.m3u8'}
+            {format:'m3u8', label:'HLS', url:'https://demo.invalid/live.m3u8'},
+            {format:'ts', label:'MPEG-TS', url:'https://demo.invalid/live.ts'}
           ];
           app.playbackCandidateIndex = 0;
           app.playbackCandidateRetries = {};

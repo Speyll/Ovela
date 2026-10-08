@@ -2357,12 +2357,12 @@
       var current = this.playbackCandidates[this.playbackCandidateIndex];
       var retries = this.playbackCandidateRetries || (this.playbackCandidateRetries = {});
       var retryCount = Number(retries[this.playbackCandidateIndex] || 0);
-      if (this.playerType === 'live' && current && current.format === 'ts' && retryCount < 1) {
+      if (this.playerType === 'live' && current && retryCount < 1) {
         var self = this;
         var retryIndex = this.playbackCandidateIndex;
         var retryMedia = this.playerMedia;
         retries[retryIndex] = retryCount + 1;
-        this.toast(reason + ' Reconnecting MPEG-TS…');
+        this.toast(reason + ' Reconnecting ' + current.label + '…');
         this.showPlayerLoading('Reconnecting stream…', current.label);
         clearTimeout(this.playbackRetryTimer);
         this.playbackRetryTimer = setTimeout(function () {
