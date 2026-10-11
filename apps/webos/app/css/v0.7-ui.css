@@ -5804,11 +5804,14 @@
    Hero remains fixed. Only content rails scroll. Explicit item margins keep
    spacing reliable on older webOS Chromium where flex-gap can be inconsistent.
    ======================================================================== */
+/* Extend Home through the shared .main 42px bottom gutter so partially
+   visible rails clip at the television edge. Keep focus clearance inside
+   the rail scroller, where it can scroll away. */
 .v07-home {
   display:flex !important;
   flex-direction:column !important;
-  height:100% !important;
-  max-height:100% !important;
+  height:calc(100% + 42px) !important;
+  max-height:calc(100% + 42px) !important;
   min-height:0 !important;
   padding:0 !important;
   overflow:hidden !important;

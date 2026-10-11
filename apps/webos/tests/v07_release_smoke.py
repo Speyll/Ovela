@@ -37,6 +37,17 @@ def main() -> None:
         page.evaluate("XtreamlyTVApp.startDemo()")
         assert page.evaluate("XtreamlyTVApp.__v07UiRefreshInstalled") is True
 
+        # Home rails must clip at the physical canvas edge, not the shared
+        # main container's bottom safe-area gutter.
+        page.evaluate("XtreamlyTVApp.renderShell('home')")
+        home_bounds = page.evaluate("""() => ({
+          canvas: document.getElementById('app').getBoundingClientRect().bottom,
+          home: document.querySelector('.v07-home').getBoundingClientRect().bottom,
+          rails: document.getElementById('v07HomeScroll').getBoundingClientRect().bottom
+        })""")
+        assert abs(home_bounds["home"] - home_bounds["canvas"]) <= 1, home_bounds
+        assert abs(home_bounds["rails"] - home_bounds["canvas"]) <= 1, home_bounds
+
         page.evaluate("XtreamlyTVApp.activeCategory.live='2'; XtreamlyTVApp.renderShell('live')")
         page.wait_for_selector("[data-v07-live-index]")
         assert page.locator("[data-v07-live-index]").count() <= 5
