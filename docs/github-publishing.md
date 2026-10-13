@@ -1,7 +1,9 @@
 # GitHub repository maintenance
 
 The public repository is https://github.com/joshcoburn/XtreamlyTV.
-`main` contains the released source; release work is prepared on `release/v0.7.0`.
+`main` contains current source; published releases are preserved by version tags.
+Delete release branches after their commits are merged and tagged. Keep branches
+with unmerged work or open pull requests until they have been reviewed.
 The Gitea remote may be retained separately for development and backup.
 
 Before publishing, run the checks in [Releasing](releasing.md), inspect the diff,

@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-release:
     permissions:
@@ -70,10 +74,17 @@ jobs:
           name: xtreamlytv-release-build-log
           path: dist/ci/android-release-build.log
           if-no-files-found: ignore
+      - name: Select versioned release notes
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          notes="docs/release-notes/${version}.md"
+          test -f "$notes"
+          echo "RELEASE_NOTES=$notes" >> "$GITHUB_ENV"
       - uses: softprops/action-gh-release@v2
         with:
           draft: true
-          body_path: docs/release-notes/0.7.0.md
+          body_path: ${{ env.RELEASE_NOTES }}
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
           files: |
             dist/release/*

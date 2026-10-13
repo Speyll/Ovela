@@ -2,6 +2,7 @@ name: webOS
 
 on:
   push:
+    branches: [main]
     paths:
       - 'apps/webos/**'
       - 'packages/core-web/**'
@@ -11,6 +12,13 @@ on:
       - '.github/workflows/webos.yml'
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate-and-package:
@@ -35,7 +43,7 @@ jobs:
           python -m pip install -r apps/webos/tests/requirements.txt
           python -m playwright install --with-deps chromium
       - name: Browser smoke test
-        run: python apps/webos/tests/browser_smoke.py
+        run: npm run test:webos
       - name: Install webOS CLI
         run: npm install -g @webos-tools/cli
       - name: Package webOS app

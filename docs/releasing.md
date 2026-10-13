@@ -12,7 +12,7 @@
 6. The release workflow tests and builds the webOS IPK and Android debug APK,
    generates SHA-256 checksums, and uploads them to a **draft** GitHub release.
    Review the successful workflow, asset checksums, and curated notes before
-   publishing. Future versions must update the workflow's release-note path.
+   publishing. Notes are selected automatically from the version tag.
 
 ## Android signing
 
