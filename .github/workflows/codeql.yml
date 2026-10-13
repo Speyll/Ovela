@@ -58,7 +58,7 @@ jobs:
           node scripts/generate-tokens.mjs
           mkdir -p dist/ci
           cd apps/android-tv
-          ./gradlew --no-daemon --stacktrace :app:assembleDebug 2>&1 | tee ../../dist/ci/codeql-android-build.log
+          ./gradlew --no-daemon --no-build-cache --rerun-tasks --stacktrace -Pkotlin.compiler.execution.strategy=in-process :app:assembleDebug 2>&1 | tee ../../dist/ci/codeql-android-build.log
       - uses: actions/upload-artifact@v4
         if: failure() && matrix.language == 'java-kotlin'
         with:

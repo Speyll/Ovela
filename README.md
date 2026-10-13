@@ -8,11 +8,13 @@ XtreamlyTV is an open-source, remote-first IPTV client for living-room televisio
 
 | Platform | Status | Package | Playback |
 |---|---|---|---|
-| LG webOS TV | **0.7.0** webOS-first beta | `.ipk` | Native webOS HTML media surface |
-| Android TV / Google TV | **0.7.0 version sync; v0.6 UI baseline** | `.apk` | AndroidX Media3 ExoPlayer |
+| LG webOS TV | **0.7.0** | `.ipk` | Native webOS HTML media surface |
+| Android TV / Google TV | **0.7.0**, debug APK for sideloading | `.apk` | AndroidX Media3 ExoPlayer |
 | Local browser demo | Development only | Static files | Browser media support |
 
-Version 0.7.0 is a webOS-first living-room UI refresh with a circular category wheel, guide-first Live TV, full-width Movies/Series rails, catalog-scoped Search, and improved Favorites/provider resilience. Android TV remains a native Kotlin/Compose implementation and is version-synchronized for the monorepo release while its v0.7 UI parity pass is deferred.
+Version 0.7.0 brings a living-room UI refresh with category navigation, guide-first Live TV, immersive backdrops, catalog-scoped search, and improved Favorites/provider resilience. Android TV includes the native browsing improvements, searchable category visibility controls, and playback/audio fixes.
+
+Download the TV packages from [GitHub Releases](https://github.com/joshcoburn/XtreamlyTV/releases/latest). The Android download is explicitly a debug build for sideloading, not a production-signed Play Store release. A differently signed existing installation may require uninstalling first, which removes local app data.
 
 ## Features
 
@@ -115,7 +117,7 @@ apps/android-tv/app/build/outputs/apk/debug/app-debug.apk
 - [0.5.0 release notes](docs/release-notes/0.5.0.md)
 - [0.4.1 release notes](docs/release-notes/0.4.1.md)
 - [0.4.0 release notes](docs/release-notes/0.4.0.md)
-- [Publish the initial GitHub repository](docs/github-publishing.md)
+- [GitHub repository maintenance](docs/github-publishing.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Privacy](PRIVACY.md)

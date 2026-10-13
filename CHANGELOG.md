@@ -1,6 +1,18 @@
 # Changelog
 
-## 0.7.0 release hardening
+## 0.7.0 - 2026-10-13
+
+### Final fixes and Android improvements
+
+- Added native Android browsing improvements and searchable provider category hiding.
+- Tuned movie/episode audio timing and preserved aspect ratio on resume.
+- Enlarged webOS EPG logos and two-line names while retaining overflow scrolling.
+- Preserved EPG focus during timeline updates and restored Home refresh after playback.
+- Unified subdued full-screen backdrops and removed the Home rail bottom gap.
+- Retry transient HLS failures before MPEG-TS fallback, with bounded reconnects.
+- Removed unused provider-response snapshots and added history secret scanning.
+
+### Release hardening
 
 - Isolated provider state and caches, discarded stale responses, and bounded
   long-session metadata retention on webOS and Android TV.
@@ -9,8 +21,6 @@
 - Removed Android's duplicate static startup logo and improved player lifecycle.
 - Hardened the optional API bridge with authentication and allowlists.
 - Added production v0.7 browser coverage, bridge tests, and Gitea CI.
-
-## 0.7.0 - 2026-08-23
 
 ### webOS living-room UI refresh
 
@@ -24,7 +34,7 @@
 - Added default alphabetical Favorites sorting with an opt-out for manual ordering.
 - Preserved focus through favorite/unfavorite re-renders.
 - Stopped failed provider reconnects from clearing saved or currently-entered provider credentials.
-- Kept Android TV version-synchronized for the monorepo release while deferring native v0.7 UI parity.
+- Brought the native Android browsing experience forward alongside webOS.
 
 ## 0.6.0 - 2026-07-26
 

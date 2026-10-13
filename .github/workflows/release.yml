@@ -6,10 +6,12 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-release:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -70,7 +72,8 @@ jobs:
           if-no-files-found: ignore
       - uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          draft: true
+          body_path: docs/release-notes/0.7.0.md
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
           files: |
             dist/release/*
