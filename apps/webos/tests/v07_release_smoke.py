@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1] / "app"
 
 def inline_app() -> str:
     css = "\n".join((ROOT / "css" / name).read_text(encoding="utf-8") for name in (
-        "tokens.css", "app.css", "v0.7-ui.css",
+        "tokens.css", "app.css", "v0.7-ui.css", "legacy-layout.css",
     ))
     scripts = []
     for name in (
@@ -50,6 +50,9 @@ def main() -> None:
 
         page.evaluate("XtreamlyTVApp.activeCategory.live='2'; XtreamlyTVApp.renderShell('live')")
         page.wait_for_selector("[data-v07-live-index]")
+        # Modern engines retain the existing Grid layout; legacy fallback is inactive.
+        assert page.locator('.v07-library').evaluate("el => getComputedStyle(el).display") == 'grid'
+        assert page.locator('.v07-guide-rows').evaluate("el => getComputedStyle(el).display") == 'grid'
         assert page.locator("[data-v07-live-index]").count() <= 5
 
         # Channel names keep a two-line viewport and marquee only when focused.

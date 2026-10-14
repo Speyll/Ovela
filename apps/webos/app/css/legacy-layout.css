@@ -1,0 +1,39 @@
+/* TV2 (Chromium 53) has no CSS Grid. Feature gating keeps TV1's layout intact. */
+@supports not (display: grid) {
+  .v07-library {
+    display:flex !important;
+    flex-direction:row !important;
+  }
+  .v07-library > .v07-category-wheel {
+    flex:0 0 310px !important;
+    margin-right:10px !important;
+  }
+  .v07-library > .v07-media-stage,
+  .v07-library > .v07-guide-stage {
+    flex:1 1 0% !important;
+    min-width:0 !important;
+    height:100% !important;
+  }
+  .v07-guide-header,
+  .v07-guide-row,
+  .v07-guide-times {
+    display:flex !important;
+  }
+  .v07-station-header,
+  .v07-guide-row > .v07-station {
+    flex:0 0 400px !important;
+    width:400px !important;
+    box-sizing:border-box !important;
+  }
+  .v07-guide-time-area,
+  .v07-program-track {
+    flex:1 1 0% !important;
+    min-width:0 !important;
+  }
+  .v07-guide-time { flex:1 1 0% !important; }
+  .v07-guide-rows {
+    display:flex !important;
+    flex-direction:column !important;
+  }
+  .v07-guide-row { flex:1 1 0px !important; }
+}

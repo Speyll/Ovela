@@ -14,8 +14,9 @@ for (const name of files) {
 const rootVersion = (await readFile(path.join(root, 'VERSION'), 'utf8')).trim();
 const index = await readFile(path.join(app, 'index.html'), 'utf8');
 if (rootVersion.startsWith('0.7.')) {
-  for (const asset of ['css/v0.7-ui.css', 'js/v0.7-ui.js']) {
+  for (const asset of ['css/v0.7-ui.css', 'css/legacy-layout.css', 'js/v0.7-ui.js']) {
     if (!index.includes(asset)) throw new Error(`webOS index.html does not load ${asset}`);
+    await readFile(path.join(app, asset), 'utf8');
   }
   const v07 = await readFile(path.join(app, 'js', 'v0.7-ui.js'), 'utf8');
   if (!v07.includes(`version:'${rootVersion}'`)) {
