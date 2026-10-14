@@ -52,7 +52,7 @@ def main() -> None:
         page.wait_for_selector("[data-v07-live-index]")
         # Modern engines retain the existing Grid layout; legacy fallback is inactive.
         assert page.locator('.v07-library').evaluate("el => getComputedStyle(el).display") == 'grid'
-        assert page.locator('.v07-guide-rows').evaluate("el => getComputedStyle(el).display") == 'grid'
+        assert page.locator('.v07-guide-row').first.evaluate("el => getComputedStyle(el).display") == 'grid'
         assert page.locator("[data-v07-live-index]").count() <= 5
 
         # Channel names keep a two-line viewport and marquee only when focused.
