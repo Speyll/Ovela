@@ -1,0 +1,11 @@
+{
+  "epgUrls": ["https://epg.example/guide.xml"],
+  "categories": [
+    { "id": "m3u-group-4bc7bc46", "name": "News" },
+    { "id": "m3u-group-257fbbf4", "name": "Movies" }
+  ],
+  "entries": [
+    { "name": "News One", "type": "live", "url": "https://stream.example/live/news-one.m3u8", "group": "News" },
+    { "name": "Example Film", "type": "movie", "url": "https://cdn.example/vod/example-film.mp4", "group": "Movies" }
+  ]
+}

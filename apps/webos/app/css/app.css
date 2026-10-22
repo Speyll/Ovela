@@ -2734,3 +2734,6 @@ body.video-mode #app,
   object-fit:contain;
   background:rgba(var(--panel-rgb),.45);
 }
+
+#xtreamFields[hidden], #m3uFields[hidden] { display:none !important; }
+#providerXtreamFields[hidden], #providerM3uFields[hidden] { display:none !important; }

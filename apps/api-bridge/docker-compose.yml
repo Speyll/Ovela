@@ -9,4 +9,5 @@ services:
       PORT: "8787"
       BRIDGE_TOKEN: "replace-with-a-long-random-token"
       ALLOWED_SERVERS: "https://your-provider.example"
+      ALLOWED_PLAYLISTS: "https://your-provider.example/playlist.m3u"
       ALLOWED_ORIGINS: "null,http://localhost"

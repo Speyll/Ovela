@@ -132,6 +132,28 @@ def main() -> None:
         page.wait_for_timeout(150)
         assert "No results" in page.locator("#v07MediaHero").inner_text()
 
+        xtream = page.evaluate("""() => {
+          const api = new XtreamlyTVApi({
+            server: 'https://primary.example:443/',
+            username: 'u name',
+            password: 'p@ss',
+            alternateServers: ['backup.example:8443']
+          }, {streamFormat: 'auto'});
+          return {
+            server: api.server,
+            alternates: api.alternateServers,
+            live: api.getLiveCandidates(7, ['m3u8', 'ts']).map(candidate => candidate.url),
+            movie: api.getMediaCandidates('movie', 9, 'mp4').map(candidate => candidate.url)
+          };
+        }""")
+        assert xtream["server"] == "https://primary.example", xtream
+        assert xtream["alternates"] == ["https://backup.example:8443"], xtream
+        assert len(xtream["live"]) == 4, xtream
+        assert xtream["live"][0] == "https://primary.example/live/u%20name/p%40ss/7.m3u8", xtream
+        assert xtream["live"][2] == "https://backup.example:8443/live/u%20name/p%40ss/7.m3u8", xtream
+        assert xtream["movie"][0] == "https://primary.example/movie/u%20name/p%40ss/9.mp4", xtream
+        assert xtream["movie"][2] == "https://backup.example:8443/movie/u%20name/p%40ss/9.mp4", xtream
+
         stale = page.evaluate("""async () => {
           const app = XtreamlyTVApp;
           app.resetCatalog();
@@ -157,7 +179,7 @@ def main() -> None:
         assert retained == {"categories": 3, "items": 3000}
         assert errors == []
         browser.close()
-    print("PASS: production v0.7 shell, stale-response guards, and bounded lookup cache.")
+    print("PASS: production v0.7 shell, Xtream/M3U failover, stale-response guards, and bounded lookup cache.")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,5 @@
+#EXTM3U url-tvg="https://epg.example/guide.xml"
+#EXTINF:-1 tvg-id="news.one" tvg-name="News One" tvg-logo="https://img.example/news.png" group-title="News",News One
+https://stream.example/live/news-one.m3u8
+#EXTINF:-1 tvg-id="film.one" tvg-logo="https://img.example/film.jpg" group-title="Movies",Example Film
+https://cdn.example/vod/example-film.mp4

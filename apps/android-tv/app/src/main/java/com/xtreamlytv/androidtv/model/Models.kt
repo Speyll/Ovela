@@ -2,6 +2,15 @@ package com.xtreamlytv.androidtv.model
 
 enum class ContentType { LIVE, MOVIE, SERIES, EPISODE }
 
+enum class SourceType(val id: String, val label: String) {
+    XTREAM("xtream", "Xtream"),
+    M3U("m3u", "M3U playlist");
+
+    companion object {
+        fun fromId(value: String?): SourceType = entries.firstOrNull { it.id == value } ?: XTREAM
+    }
+}
+
 enum class AppTheme(val id: String, val label: String) {
     BLUE("blue", "Blue"),
     TEAL("teal", "Teal"),
@@ -36,10 +45,27 @@ fun AppSettings.hiddenCategoryIds(type: ContentType): Set<String> =
     hiddenCatalogCategories[type].orEmpty()
 
 data class Credentials(
-    val server: String,
-    val username: String,
-    val password: String,
-)
+    val server: String = "",
+    val username: String = "",
+    val password: String = "",
+    val sourceType: SourceType = SourceType.XTREAM,
+    val playlistUrl: String = "",
+    val alternateServers: List<String> = emptyList(),
+) {
+    val isM3u: Boolean get() = sourceType == SourceType.M3U
+
+    companion object {
+        fun xtream(server: String, username: String, password: String): Credentials =
+            Credentials(server = server, username = username, password = password)
+
+        fun m3u(playlistUrl: String, alternateServers: List<String> = emptyList()): Credentials =
+            Credentials(
+                sourceType = SourceType.M3U,
+                playlistUrl = playlistUrl,
+                alternateServers = alternateServers,
+            )
+    }
+}
 
 data class Category(
     val id: String,
@@ -57,6 +83,8 @@ data class CatalogItem(
     val coverUrl: String? = null,
     /** 16:9 hero/fanart artwork. */
     val backdropUrl: String? = null,
+    /** Direct stream URL for M3U entries. Xtream items continue to build URLs from provider data. */
+    val streamUrl: String? = null,
     val containerExtension: String? = null,
     val rating: Double? = null,
     val plot: String? = null,

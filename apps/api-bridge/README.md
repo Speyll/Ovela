@@ -4,6 +4,9 @@ Some webOS providers reject browser-origin API calls because they do not return 
 
 Configure `BRIDGE_TOKEN` with a long random value, list the exact provider base
 URL in `ALLOWED_SERVERS`, and list permitted app origins in `ALLOWED_ORIGINS`.
+For M3U playlists, set `ALLOWED_PLAYLISTS` to the exact, comma-separated playlist
+URLs (including any query-string token) and redirect targets. The bridge rejects
+all other URLs and does not become a general-purpose HTTP proxy.
 The supplied Compose file contains placeholders that must be replaced.
 Packaged file-based TV apps commonly send the literal origin `null`; retain it
 only when the bridge is protected by a strong token and a trusted LAN firewall.
@@ -19,6 +22,8 @@ http://YOUR_LAN_HOST:8787
 ```
 
 Enter the same bridge token in XtreamlyTV Settings. Requests without the token,
-from an unlisted browser origin, or to an unlisted provider are rejected.
+from an unlisted browser origin, or to an unlisted provider or playlist are rejected.
+Playlist tokens are configuration secrets; rotate the bridge configuration when
+a playlist URL changes.
 
 Do not expose this service directly to the public internet. Android TV normally does not need the bridge because it uses native HTTP networking.

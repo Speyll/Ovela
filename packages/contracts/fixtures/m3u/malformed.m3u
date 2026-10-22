@@ -1,0 +1,8 @@
+#EXTM3U
+#EXTINF:-1 group-title="News",Broken without URL
+#EXTGRP:Talk
+#EXTINF:0,Direct channel
+https://stream.example/live/direct.ts
+#EXTINF:-1,Missing name metadata
+https://stream.example/live/unnamed.m3u8
+https://stream.example/live/bare-entry.ts

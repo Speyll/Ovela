@@ -38,14 +38,75 @@
     }, function (error) { clearTimeout(timer); throw error; });
   }
 
+  function withTextTimeout(url, options, timeoutMs) {
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    if (controller) options = Object.assign({}, options, { signal: controller.signal });
+    var timer;
+    var deadline = new Promise(function (_, reject) {
+      timer = setTimeout(function () {
+        var error = new Error('The provider took too long to respond.');
+        error.name = 'AbortError';
+        reject(error);
+        if (controller) controller.abort();
+      }, timeoutMs || 25000);
+    });
+    var read = function (response) {
+      if (!response.ok) {
+        var error = new Error('Provider returned HTTP ' + response.status + '.');
+        error.status = response.status;
+        throw error;
+      }
+      var declaredLength = Number(response.headers && response.headers.get('content-length') || 0);
+      if (declaredLength > 32 * 1024 * 1024) throw new Error('Playlist is too large to load safely.');
+      return response.text().then(function (text) {
+        if (text.length > 32 * 1024 * 1024) throw new Error('Playlist is too large to load safely.');
+        return text;
+      });
+    };
+    return Promise.race([fetch(url, options).then(read), deadline]).then(function (data) {
+      clearTimeout(timer); return data;
+    }, function (error) { clearTimeout(timer); throw error; });
+  }
+
+  function normalizeServer(value, fallback) {
+    var raw = String(value || '').trim();
+    if (!raw) return '';
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) {
+      var protocol = 'http:';
+      try { protocol = new URL(String(fallback || '')).protocol; } catch (_) {}
+      raw = protocol + '//' + raw;
+    }
+    try {
+      var parsed = new URL(raw);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+      parsed.hash = '';
+      parsed.search = '';
+      return Core.trimSlash(parsed.toString());
+    } catch (_) { return ''; }
+  }
+
   function XtreamApi(credentials, settings) {
-    this.server = Core.trimSlash(credentials.server);
+    this.server = normalizeServer(credentials.server, '') || Core.trimSlash(credentials.server);
     this.username = String(credentials.username || '').trim();
     this.password = String(credentials.password || '');
+    var seen = {};
+    seen[this.server] = true;
+    this.alternateServers = (Array.isArray(credentials.alternateServers) ? credentials.alternateServers : [])
+      .map(function (value) { return normalizeServer(value, this.server); }, this)
+      .filter(function (value) { if (!value || seen[value]) return false; seen[value] = true; return true; });
+    this.servers = [this.server].concat(this.alternateServers);
     this.proxyToken = String(settings && settings.apiProxyToken || '');
     this.proxy = Core.trimSlash(settings && settings.apiProxy);
     this.streamFormat = (settings && settings.streamFormat) || 'auto';
   }
+
+  XtreamApi.prototype.streamUrlFor = function (server, type, streamId, extension) {
+    return Core.buildStreamUrl({
+      server: server,
+      username: this.username,
+      password: this.password
+    }, type, streamId, extension);
+  };
 
   XtreamApi.prototype.request = function (action, extras, requestOptions) {
     var params = Object.assign({}, extras || {});
@@ -158,7 +219,7 @@
 
   XtreamApi.prototype.getStreamUrl = function (streamId, format) {
     format = format || (this.streamFormat === 'auto' ? 'm3u8' : this.streamFormat) || 'm3u8';
-    return Core.buildStreamUrl(this, 'live', streamId, format);
+    return this.streamUrlFor(this.server, 'live', streamId, format);
   };
 
   XtreamApi.prototype.getLiveCandidates = function (streamId, allowedFormats) {
@@ -169,19 +230,28 @@
       formats = formats.filter(function (format) { return allowed.indexOf(format) >= 0; });
       if (!formats.length) formats = allowed.filter(function (format) { return format === 'm3u8' || format === 'ts'; });
     }
-    var seen = {};
-    return formats.filter(function (format) {
-      if (seen[format]) return false;
-      seen[format] = true;
+    var seenFormats = {};
+    formats = formats.filter(function (format) {
+      if (seenFormats[format]) return false;
+      seenFormats[format] = true;
       return true;
-    }).map(function (format) {
-      return {
-        url: this.getStreamUrl(streamId, format),
-        label: format === 'm3u8' ? 'HLS' : 'MPEG-TS',
-        format: format,
-        mime: format === 'm3u8' ? 'application/x-mpegURL' : 'video/mp2t'
-      };
+    });
+    var seenUrls = {};
+    var candidates = [];
+    this.servers.forEach(function (server, serverIndex) {
+      formats.forEach(function (format) {
+        var url = this.streamUrlFor(server, 'live', streamId, format);
+        if (seenUrls[url]) return;
+        seenUrls[url] = true;
+        candidates.push({
+          url: url,
+          label: (format === 'm3u8' ? 'HLS' : 'MPEG-TS') + (serverIndex ? ' backup' : ''),
+          format: format,
+          mime: format === 'm3u8' ? 'application/x-mpegURL' : 'video/mp2t'
+        });
+      }, this);
     }, this);
+    return candidates;
   };
 
   XtreamApi.prototype.getAlternateStreamUrl = function (streamId) {
@@ -189,24 +259,34 @@
   };
 
   XtreamApi.prototype.getMovieUrl = function (streamId, extension) {
-    return Core.buildStreamUrl(this, 'movie', streamId, Core.safeExtension(extension, 'mp4'));
+    return this.streamUrlFor(this.server, 'movie', streamId, Core.safeExtension(extension, 'mp4'));
   };
 
   XtreamApi.prototype.getSeriesStreamUrl = function (streamId, extension) {
-    return Core.buildStreamUrl(this, 'episode', streamId, Core.safeExtension(extension, 'mp4'));
+    return this.streamUrlFor(this.server, 'episode', streamId, Core.safeExtension(extension, 'mp4'));
   };
 
   XtreamApi.prototype.getMediaCandidates = function (type, streamId, extension) {
     var primary = Core.safeExtension(extension, 'mp4');
-    var alternates = primary === 'mp4' ? ['mkv'] : ['mp4'];
-    return [primary].concat(alternates).map(function (ext) {
-      return {
-        url: type === 'episode' ? this.getSeriesStreamUrl(streamId, ext) : this.getMovieUrl(streamId, ext),
-        label: ext.toUpperCase(),
-        format: ext,
-        mime: ext === 'mp4' ? 'video/mp4' : ''
-      };
+    var extensions = [primary].concat(primary === 'mp4' ? ['mkv'] : ['mp4']).filter(function (ext, index, list) {
+      return list.indexOf(ext) === index;
+    });
+    var seen = {};
+    var candidates = [];
+    this.servers.forEach(function (server, serverIndex) {
+      extensions.forEach(function (ext) {
+        var url = this.streamUrlFor(server, type, streamId, ext);
+        if (seen[url]) return;
+        seen[url] = true;
+        candidates.push({
+          url: url,
+          label: ext.toUpperCase() + (serverIndex ? ' backup' : ''),
+          format: ext,
+          mime: ext === 'mp4' ? 'video/mp4' : ''
+        });
+      }, this);
     }, this);
+    return candidates;
   };
 
   XtreamApi.prototype.getAlternateMediaUrl = function (type, streamId, extension) {
@@ -214,6 +294,101 @@
     return candidates.length > 1 ? candidates[1].url : candidates[0].url;
   };
 
+  function M3uApi(credentials, settings) {
+    this.playlistUrl = String(credentials && (credentials.playlistUrl || credentials.playlist_url) || '').trim();
+    this.alternateServers = credentials && Array.isArray(credentials.alternateServers) ? credentials.alternateServers : [];
+    this.proxy = Core.trimSlash(settings && settings.apiProxy);
+    this.proxyToken = String(settings && settings.apiProxyToken || '');
+    this.entries = [];
+    this.categories = [];
+    this.parsed = null;
+  }
+
+  M3uApi.prototype.fetchPlaylist = function () {
+    if (this.parsed) return Promise.resolve(this.parsed);
+    if (!this.playlistUrl) return Promise.reject(new Error('Enter an M3U playlist URL.'));
+    var request;
+    if (this.proxy) {
+      var headers = { 'Content-Type': 'application/json' };
+      if (this.proxyToken) headers.Authorization = 'Bearer ' + this.proxyToken;
+      request = withTextTimeout(this.proxy + '/api/m3u', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ url: this.playlistUrl })
+      }, 45000);
+    } else {
+      request = withTextTimeout(this.playlistUrl, { method: 'GET' }, 45000).catch(function (error) {
+        if (error && error.name === 'AbortError') error.message = 'The playlist took too long to respond.';
+        else if (String(error && error.message).toLowerCase().indexOf('fetch') >= 0) {
+          error.message = 'The playlist could not be loaded from this TV. Check CORS access or configure the optional API Bridge.';
+        }
+        throw error;
+      });
+    }
+    var self = this;
+    return request.then(function (text) {
+      var parsed = Core.parseM3u(text);
+      if (!parsed.entries.length) {
+        var error = new Error('The playlist did not contain any playable entries.');
+        error.playlistWarnings = parsed.warnings;
+        throw error;
+      }
+      self.parsed = parsed;
+      self.entries = parsed.entries;
+      self.categories = parsed.categories;
+      return parsed;
+    });
+  };
+
+  M3uApi.prototype.authenticate = function () {
+    return this.fetchPlaylist().then(function (parsed) {
+      return {
+        username: 'M3U playlist',
+        status: parsed.entries.length + ' entries',
+        expiration: null,
+        epgUrls: parsed.epgUrls,
+        warnings: parsed.warnings
+      };
+    });
+  };
+
+  M3uApi.prototype.categoriesFor = function (type) {
+    return Core.m3uCategories(this.entries, type);
+  };
+
+  M3uApi.prototype.itemsFor = function (type, categoryId) {
+    return this.entries.filter(function (entry) {
+      return entry.content_type === type && (!categoryId || categoryId === 'all' || entry.category_id === categoryId);
+    }).map(function (entry) { return Object.assign({}, entry); });
+  };
+
+  M3uApi.prototype.findItem = function (value) {
+    if (value && typeof value === 'object') return value;
+    var id = String(value || '');
+    return this.entries.find(function (entry) {
+      return String(entry.stream_id) === id || String(entry.id) === id;
+    }) || null;
+  };
+
+  M3uApi.prototype.getLiveCategories = function () { return Promise.resolve(this.categoriesFor('live')); };
+  M3uApi.prototype.getVodCategories = function () { return Promise.resolve(this.categoriesFor('movie')); };
+  M3uApi.prototype.getSeriesCategories = function () { return Promise.resolve([]); };
+  M3uApi.prototype.getLiveStreams = function (categoryId) { return Promise.resolve(this.itemsFor('live', categoryId)); };
+  M3uApi.prototype.getVodStreams = function (categoryId) { return Promise.resolve(this.itemsFor('movie', categoryId)); };
+  M3uApi.prototype.getSeries = function () { return Promise.resolve([]); };
+  M3uApi.prototype.discoverSeries = function () { return Promise.resolve({ categories: [], items: [] }); };
+  M3uApi.prototype.getShortEpg = function () { return Promise.resolve([]); };
+  M3uApi.prototype.getVodInfo = function (id) { return Promise.resolve(this.findItem(id) || {}); };
+  M3uApi.prototype.getSeriesInfo = function () { return Promise.resolve({}); };
+  M3uApi.prototype.getLiveCandidates = function (item) {
+    return Core.m3uCandidates(this.findItem(item), this.alternateServers);
+  };
+  M3uApi.prototype.getMediaCandidates = function (type, id) {
+    return Core.m3uCandidates(this.findItem(id), this.alternateServers);
+  };
+
+  XtreamApi.M3uApi = M3uApi;
+  window.XtreamlyTVM3uApi = M3uApi;
   XtreamApi.normalizeCollection = Core.normalizeCollection;
   XtreamApi.deriveCategories = Core.deriveCategories;
   window.XtreamlyTVApi = window.TVeeApi = XtreamApi;

@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.xtreamlytv.androidtv.data.CredentialsStore
 import com.xtreamlytv.androidtv.data.LocalStateStore
+import com.xtreamlytv.androidtv.data.M3uClient
+import com.xtreamlytv.androidtv.data.SourceClient
 import com.xtreamlytv.androidtv.data.MediaCacheStore
 import com.xtreamlytv.androidtv.data.ProviderUrl
 import com.xtreamlytv.androidtv.data.XtreamClient
@@ -114,7 +116,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         LocalStateStore(application)
     }
     private val mediaCacheStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { MediaCacheStore(application) }
-    private var client: XtreamClient? = null
+    private var client: SourceClient? = null
     private val movieDetailJobs = mutableMapOf<String, Job>()
     private val categoryCache = LinkedHashMap<String, List<CatalogItem>>(16, 0.75f, true)
     private var catalogRequestId = 0L
@@ -201,12 +203,32 @@ val state: StateFlow<AppUiState> = _state.asStateFlow()
         failureScreen: AppScreen,
     ) {
         val normalizedCredentials = runCatching {
-            credentials.copy(
-                server = ProviderUrl.normalize(credentials.server),
-                username = credentials.username.trim(),
-            ).also {
-                require(it.username.isNotBlank()) { "Enter your provider username." }
-                require(it.password.isNotBlank()) { "Enter your provider password." }
+            if (credentials.isM3u) {
+                val playlistUrl = credentials.playlistUrl.trim()
+                require(
+                    playlistUrl.startsWith("http://", true) ||
+                        playlistUrl.startsWith("https://", true) ||
+                        playlistUrl.startsWith("file://", true),
+                ) { "Enter a complete M3U playlist URL." }
+                credentials.copy(
+                    server = "",
+                    username = "",
+                    password = "",
+                    playlistUrl = playlistUrl,
+                    alternateServers = credentials.alternateServers
+                        .map { it.trim().trimEnd('/') }
+                        .filter { it.isNotBlank() }
+                        .distinct()
+                        .take(4),
+                )
+            } else {
+                credentials.copy(
+                    server = ProviderUrl.normalize(credentials.server),
+                    username = credentials.username.trim(),
+                ).also {
+                    require(it.username.isNotBlank()) { "Enter your provider username." }
+                    require(it.password.isNotBlank()) { "Enter your provider password." }
+                }
             }
         }.getOrElse { error ->
             _state.update {
@@ -234,7 +256,11 @@ val state: StateFlow<AppUiState> = _state.asStateFlow()
 
         viewModelScope.launch {
             try {
-                val candidate = XtreamClient(normalizedCredentials)
+                val candidate: SourceClient = if (normalizedCredentials.isM3u) {
+                    M3uClient(normalizedCredentials)
+                } else {
+                    XtreamClient(normalizedCredentials)
+                }
                 val profile = withTimeout(CONNECTION_TIMEOUT_MS) { candidate.authenticate() }
                 if (generation != connectionGeneration) return@launch
 
@@ -295,7 +321,7 @@ val state: StateFlow<AppUiState> = _state.asStateFlow()
         }
     }
 
-    private fun loadCategories(candidate: XtreamClient) {
+    private fun loadCategories(candidate: SourceClient) {
         viewModelScope.launch {
             val categories = coroutineScope {
                 ContentType.entries
@@ -647,10 +673,15 @@ val state: StateFlow<AppUiState> = _state.asStateFlow()
         val origin = _state.value.screen
         val returnFocus = focusForScreen(origin)
         val progress = _state.value.progress[itemKey(item)]
+        val candidates = api.streamCandidates(item, _state.value.settings.streamFormat)
+        if (candidates.isEmpty()) {
+            _state.update { it.copy(error = "This item does not include a playable stream.") }
+            return
+        }
         val request = PlayerRequest(
             item = item,
             queue = playableQueue.ifEmpty { listOf(item) },
-            urlCandidates = api.streamCandidates(item, _state.value.settings.streamFormat),
+            urlCandidates = candidates,
             startPositionMs = progress?.positionMs ?: 0L,
         )
         addRecent(item)
@@ -665,6 +696,11 @@ val state: StateFlow<AppUiState> = _state.asStateFlow()
         val next = queue[(currentIndex + delta + queue.size) % queue.size]
         val api = client ?: return
         val progress = _state.value.progress[itemKey(next)]
+        val candidates = api.streamCandidates(next, _state.value.settings.streamFormat)
+        if (candidates.isEmpty()) {
+            _state.update { it.copy(error = "This item does not include a playable stream.") }
+            return
+        }
         addRecent(next)
         _state.update {
             it.copy(
@@ -672,7 +708,7 @@ val state: StateFlow<AppUiState> = _state.asStateFlow()
                     request = PlayerRequest(
                         item = next,
                         queue = queue,
-                        urlCandidates = api.streamCandidates(next, it.settings.streamFormat),
+                        urlCandidates = candidates,
                         startPositionMs = progress?.positionMs ?: 0L,
                     ),
                     origin = screen.origin,

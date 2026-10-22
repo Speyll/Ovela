@@ -33,9 +33,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xtreamlytv.androidtv.BuildConfig
 import com.xtreamlytv.androidtv.model.AppTheme
+import com.xtreamlytv.androidtv.model.Credentials
+import com.xtreamlytv.androidtv.model.SourceType
 import com.xtreamlytv.androidtv.model.StreamFormat
 import com.xtreamlytv.androidtv.ui.theme.palette
 import com.xtreamlytv.androidtv.ui.theme.paletteFor
+import java.net.URI
 import kotlinx.coroutines.delay
 
 @Composable
@@ -45,9 +48,16 @@ fun SettingsScreen(
     contentEntryFocus: FocusRequester,
 ) {
     var editingProvider by remember { mutableStateOf(false) }
+    var sourceType by remember(state.credentials) {
+        mutableStateOf(state.credentials?.sourceType ?: SourceType.XTREAM)
+    }
     var server by remember(state.credentials) { mutableStateOf(state.credentials?.server.orEmpty()) }
     var username by remember(state.credentials) { mutableStateOf(state.credentials?.username.orEmpty()) }
     var password by remember(state.credentials) { mutableStateOf(state.credentials?.password.orEmpty()) }
+    var playlistUrl by remember(state.credentials) { mutableStateOf(state.credentials?.playlistUrl.orEmpty()) }
+    var alternateHosts by remember(state.credentials) {
+        mutableStateOf(state.credentials?.alternateServers?.joinToString(", ").orEmpty())
+    }
     val scrollState = rememberScrollState()
 
     // When the edit button is replaced by the first text field, keep the
@@ -70,11 +80,25 @@ fun SettingsScreen(
             .padding(bottom = 52.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        SettingsCard("Provider", "Your saved Xtream connection. Edit only when you want to reconnect with different details.") {
+        SettingsCard("Provider", "Your saved Xtream account or M3U playlist. Edit only when you want to reconnect with different details.") {
             if (!editingProvider) {
-                ProviderSummaryRow("Server", state.credentials?.server ?: "Not configured")
-                ProviderSummaryRow("Username", state.credentials?.username ?: "Not configured")
-                ProviderSummaryRow("Password", if (state.credentials == null) "Not configured" else "••••••••")
+                if (state.credentials?.isM3u == true) {
+                    ProviderSummaryRow("Source", "M3U playlist")
+                    ProviderSummaryRow("Playlist", state.credentials?.playlistUrl?.let(::maskPlaylistUrl) ?: "Not configured")
+                    ProviderSummaryRow(
+                        "Alternate hosts",
+                        state.credentials?.alternateServers?.size?.toString() ?: "0",
+                    )
+                } else {
+                    ProviderSummaryRow("Source", "Xtream account")
+                    ProviderSummaryRow("Server", state.credentials?.server ?: "Not configured")
+                    ProviderSummaryRow("Username", state.credentials?.username ?: "Not configured")
+                    ProviderSummaryRow("Password", if (state.credentials == null) "Not configured" else "••••••••")
+                    ProviderSummaryRow(
+                        "Alternate hosts",
+                        state.credentials?.alternateServers?.size?.toString() ?: "0",
+                    )
+                }
                 Spacer(Modifier.height(9.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     TvButton(
@@ -86,24 +110,69 @@ fun SettingsScreen(
                     TvButton("Disconnect provider", viewModel::disconnect, Modifier.width(142.dp), TvButtonStyle.Danger)
                 }
             } else {
-                TvTextField(
-                    "Server URL",
-                    server,
-                    { server = it },
-                    placeholder = "http://provider.example:port",
-                    focusRequester = contentEntryFocus,
-                )
-                Spacer(Modifier.height(7.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TvTextField("Username", username, { username = it }, Modifier.weight(1f))
-                    TvTextField("Password", password, { password = it }, Modifier.weight(1f), password = true)
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    TvChip(
+                        label = "Xtream",
+                        selected = sourceType == SourceType.XTREAM,
+                        onClick = { sourceType = SourceType.XTREAM },
+                    )
+                    TvChip(
+                        label = "M3U playlist",
+                        selected = sourceType == SourceType.M3U,
+                        onClick = { sourceType = SourceType.M3U },
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                if (sourceType == SourceType.XTREAM) {
+                    TvTextField(
+                        "Server URL",
+                        server,
+                        { server = it },
+                        placeholder = "http://provider.example:port",
+                        focusRequester = contentEntryFocus,
+                    )
+                    Spacer(Modifier.height(7.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TvTextField("Username", username, { username = it }, Modifier.weight(1f))
+                        TvTextField("Password", password, { password = it }, Modifier.weight(1f), password = true)
+                    }
+                    Spacer(Modifier.height(7.dp))
+                    TvTextField(
+                        "Alternate hosts (optional, comma-separated)",
+                        alternateHosts,
+                        { alternateHosts = it },
+                        placeholder = "https://backup.example:443",
+                    )
+                } else {
+                    TvTextField(
+                        "Playlist URL",
+                        playlistUrl,
+                        { playlistUrl = it },
+                        placeholder = "https://provider.example/playlist.m3u",
+                        focusRequester = contentEntryFocus,
+                    )
+                    Spacer(Modifier.height(7.dp))
+                    TvTextField(
+                        "Alternate hosts (optional, comma-separated)",
+                        alternateHosts,
+                        { alternateHosts = it },
+                        placeholder = "https://backup.example:443",
+                    )
                 }
                 Spacer(Modifier.height(9.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     TvButton(
                         "Save and reconnect",
                         {
-                            viewModel.updateProvider(com.xtreamlytv.androidtv.model.Credentials(server, username, password))
+                            val alternates = alternateHosts.split(',', '\n')
+                                .map(String::trim)
+                                .filter(String::isNotBlank)
+                            val next = if (sourceType == SourceType.M3U) {
+                                Credentials.m3u(playlistUrl, alternates)
+                            } else {
+                                Credentials.xtream(server, username, password).copy(alternateServers = alternates)
+                            }
+                            viewModel.updateProvider(next)
                             editingProvider = false
                         },
                         Modifier.width(142.dp),
@@ -301,4 +370,18 @@ private fun DiagnosticPill(label: String) {
             .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(50))
             .padding(horizontal = 8.dp, vertical = 4.dp),
     )
+}
+
+private fun maskPlaylistUrl(value: String): String {
+    if (value.isBlank()) return "Not configured"
+    return runCatching {
+        val uri = URI(value)
+        val host = uri.host
+        if (host.isNullOrBlank()) {
+            "Configured playlist"
+        } else {
+            val port = if (uri.port >= 0) ":" + uri.port else ""
+            uri.scheme + "://" + host + port + "/…"
+        }
+    }.getOrDefault("Configured playlist")
 }

@@ -147,6 +147,12 @@ adb logcat | grep -E "XtreamlyTV|ExoPlayer|MediaCodec"
 
 Do not publish logs containing provider passwords or authenticated stream URLs.
 
+## Provider sources and recovery
+
+Android TV accepts an Xtream account, an M3U/M3U+ playlist URL, or a local playlist file selected through the system document picker. Local imports are copied into app-private storage so the source remains available after the picker grant expires. Optional alternate hosts preserve stream paths and query tokens while replacing the origin.
+
+Player recovery distinguishes transient failures from permanent authentication, authorization, not-found, and unsupported-format failures. It tries the next URL candidate before repeating the same candidate and enforces a finite retry budget. A first-frame timeout and a post-start progress watchdog cover streams that fail without raising a Media3 error.
+
 ## Cleartext HTTP providers
 
 Many Xtream providers use HTTP rather than HTTPS. The application permits cleartext provider traffic for compatibility and warns during provider setup when credentials will not be protected in transit. Authenticated stream URLs and provider passwords must never be included in logs or bug reports.

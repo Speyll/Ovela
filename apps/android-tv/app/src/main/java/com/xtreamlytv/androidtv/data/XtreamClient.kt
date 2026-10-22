@@ -26,11 +26,11 @@ import java.util.concurrent.TimeUnit
 class XtreamClient(
     private val credentials: Credentials,
     private val http: OkHttpClient = defaultHttpClient(),
-) {
+) : SourceClient {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
     private val server = ProviderUrl.normalize(credentials.server)
 
-    suspend fun authenticate(): ProviderSummary = withContext(Dispatchers.IO) {
+    override suspend fun authenticate(): ProviderSummary = withContext(Dispatchers.IO) {
         val root = requestJson(null)
         val info = root.obj("user_info") ?: error("Provider returned an invalid authentication response.")
         if (info.string("auth") != "1") error(info.string("message").ifBlank { "Login was rejected by the provider." })
@@ -41,7 +41,7 @@ class XtreamClient(
         )
     }
 
-    suspend fun categories(type: ContentType): List<Category> = withContext(Dispatchers.IO) {
+    override suspend fun categories(type: ContentType): List<Category> = withContext(Dispatchers.IO) {
         val action = when (type) {
             ContentType.LIVE -> "get_live_categories"
             ContentType.MOVIE -> "get_vod_categories"
@@ -55,7 +55,7 @@ class XtreamClient(
         }
     }
 
-    suspend fun items(type: ContentType, categoryId: String): List<CatalogItem> = withContext(Dispatchers.IO) {
+    override suspend fun items(type: ContentType, categoryId: String): List<CatalogItem> = withContext(Dispatchers.IO) {
         val action = when (type) {
             ContentType.LIVE -> "get_live_streams"
             ContentType.MOVIE -> "get_vod_streams"
@@ -70,14 +70,14 @@ class XtreamClient(
         normalizeCollection(response, preferredItemKeys(type)).mapNotNull { parseItem(it, type) }
     }
 
-    suspend fun movieInfo(movie: CatalogItem): CatalogItem = withContext(Dispatchers.IO) {
+    override suspend fun movieInfo(movie: CatalogItem): CatalogItem = withContext(Dispatchers.IO) {
         val root = requestJson("get_vod_info", mapOf("vod_id" to movie.id))
         val info = root.obj("info") ?: JsonObject(emptyMap())
         val data = root.obj("movie_data") ?: JsonObject(emptyMap())
         mergeRichItem(movie, data, info, ContentType.MOVIE)
     }
 
-    suspend fun seriesDetail(series: CatalogItem): Pair<CatalogItem, List<CatalogItem>> = withContext(Dispatchers.IO) {
+    override suspend fun seriesDetail(series: CatalogItem): Pair<CatalogItem, List<CatalogItem>> = withContext(Dispatchers.IO) {
         val root = requestJson("get_series_info", mapOf("series_id" to series.id))
         val info = root.obj("info") ?: JsonObject(emptyMap())
         val richSeries = mergeRichItem(series, JsonObject(emptyMap()), info, ContentType.SERIES)
@@ -100,7 +100,7 @@ class XtreamClient(
         richSeries to episodes
     }
 
-    suspend fun shortEpg(streamId: String, limit: Int = 10): List<EpgProgram> = withContext(Dispatchers.IO) {
+    override suspend fun shortEpg(streamId: String, limit: Int): List<EpgProgram> = withContext(Dispatchers.IO) {
         val root = requestJson("get_short_epg", mapOf("stream_id" to streamId, "limit" to limit.toString()))
         val listing = (root["epg_listings"] as? JsonArray)
             ?: (root["data"] as? JsonArray)
@@ -125,7 +125,7 @@ class XtreamClient(
         }
     }
 
-    fun streamCandidates(item: CatalogItem, preferredFormat: StreamFormat = StreamFormat.AUTO): List<String> =
+    override fun streamCandidates(item: CatalogItem, preferredFormat: StreamFormat): List<String> =
         StreamUrlBuilder.candidates(credentials, item, preferredFormat)
 
     private fun mergeRichItem(base: CatalogItem, data: JsonObject, info: JsonObject, type: ContentType): CatalogItem {

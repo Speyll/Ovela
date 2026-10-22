@@ -1,6 +1,6 @@
 # XtreamlyTV
 
-XtreamlyTV is an open-source, remote-first IPTV client for living-room televisions. It connects to user-supplied Xtream-compatible providers and presents Live TV, Movies, and Series in a fast, category-scoped interface built for very large catalogs.
+XtreamlyTV is an open-source, remote-first IPTV client for living-room televisions. It connects to user-supplied Xtream-compatible providers or M3U/M3U+ playlists and presents Live TV, Movies, and Series in a fast, category-scoped interface built for very large catalogs.
 
 > XtreamlyTV does not provide channels, subscriptions, playlists, or copyrighted media. Use it only with services and content you are authorized to access.
 
@@ -18,7 +18,9 @@ Download the TV packages from [GitHub Releases](https://github.com/joshcoburn/Xt
 
 ## Features
 
-- Xtream provider authentication
+- Xtream account authentication
+- M3U/M3U+ playlist import from a URL on both platforms, plus local playlist import on Android TV
+- Explicit alternate-host failover for Xtream and M3U streams
 - Category-scoped Live TV, VOD, and Series browsing
 - Bounded large-catalog navigation with circular categories, five-row EPG, and six-card media rails
 - Favorites virtual categories, custom collections, default A-Z sorting, and editable group management
@@ -28,7 +30,7 @@ Download the TV packages from [GitHub Releases](https://github.com/joshcoburn/Xt
 - Remote-first navigation and focus states
 - Matching Teal, Graphite, Purple, Pink, and Blue skins on both TV platforms
 - Editable provider settings, catalog cache controls, local history, and privacy controls
-- Optional LAN API bridge for providers that block browser CORS
+- Optional LAN API bridge for providers that block browser CORS, including an allowlisted M3U playlist endpoint
 - No advertising, analytics, or tracking
 
 ## Monorepo layout
@@ -39,7 +41,7 @@ apps/
   android-tv/     Native Android TV / Google TV app
   api-bridge/     Optional local metadata/CORS bridge
 packages/
-  core-web/       Shared browser/webOS Xtream and persistence primitives
+  core-web/       Shared browser/webOS Xtream, M3U, recovery, and persistence primitives
   contracts/      Platform-neutral JSON schemas and fixtures
   design-tokens/  Shared brand, spacing, color, and motion tokens
   brand/          Canonical project artwork

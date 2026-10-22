@@ -24,10 +24,12 @@ This keeps branding and spacing changes deliberate and reviewable.
 The canonical JavaScript implementation contains:
 
 - Xtream response normalization
+- M3U/M3U+ parsing, categories, and alternate-host URL rewriting
 - content-type inference
 - stable item IDs
 - stream URL construction
-- web-compatible provider client
+- bounded playback-recovery decisions
+- web-compatible provider clients
 - webOS local persistence behavior
 
 The webOS packaging tree receives generated copies through `npm run sync:core`.
@@ -47,10 +49,9 @@ The Android implementation currently mirrors the shared data contracts rather th
 ## Data flow
 
 ```text
-Provider credentials
-        │
-        ▼
-Authentication: player_api.php
+Source selection
+        ├── Xtream: player_api.php authentication
+        └── M3U/M3U+: fetch and index the playlist
         │
         ▼
 Category indexes only
@@ -68,6 +69,12 @@ Platform player adapter
         ├── webOS HTML media surface
         └── Android Media3 ExoPlayer
 ```
+
+## Source and recovery model
+
+Each platform exposes an Xtream client and an M3U client behind the same catalog interface. M3U entries carry a direct stream URL; user-configured alternate hosts are used only to rewrite the origin, preserving paths, query tokens, and media format. No host discovery is performed.
+
+Playback failures are classified as transient or permanent and handled with a bounded policy: try another URL candidate before repeating, retry transient failures with a delay cap, and stop with an honest message when the candidate/retry budget is exhausted. A stream that never starts or stops advancing is treated as a stall rather than a permanent codec failure.
 
 ## Large-catalog rules
 

@@ -1,0 +1,5 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="auth.stream" group-title="News",Authenticated stream
+https://origin.example/live/channel.m3u8?token=abc&expires=123
+#EXTINF:-1 group-title="Backup",Backup stream
+https://origin.example/live/backup.ts

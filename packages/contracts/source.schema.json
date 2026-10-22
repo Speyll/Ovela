@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xtreamlytv.github.io/contracts/source.schema.json",
+  "title": "XtreamlyTV source configuration",
+  "type": "object",
+  "required": ["sourceType"],
+  "properties": {
+    "sourceType": { "enum": ["xtream", "m3u"] },
+    "server": { "type": "string" },
+    "username": { "type": "string" },
+    "password": { "type": "string" },
+    "playlistUrl": { "type": "string" },
+    "alternateServers": {
+      "type": "array",
+      "maxItems": 4,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "additionalProperties": false
+}

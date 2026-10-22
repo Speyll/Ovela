@@ -66,6 +66,12 @@ Equivalent direct command:
 ares-package --no-minify -o dist/webos apps/webos/app
 ```
 
+## Provider sources
+
+XtreamlyTV accepts either an Xtream account or an M3U/M3U+ playlist URL. For M3U, the TV downloads and indexes the playlist locally; playback still goes directly to the stream host. Optional alternate hosts rewrite only the scheme/host/port, preserving the original stream path and query token.
+
+LG webOS enforces browser CORS on provider requests. If an M3U host does not allow the TV origin, configure the optional [API bridge](../../apps/api-bridge/README.md), add the exact playlist URL to `ALLOWED_PLAYLISTS`, and enter the bridge URL and token in Settings.
+
 ## Install and launch
 
 ```bash

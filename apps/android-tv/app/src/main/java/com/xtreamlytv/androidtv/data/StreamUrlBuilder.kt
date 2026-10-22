@@ -12,6 +12,32 @@ object StreamUrlBuilder {
         item: CatalogItem,
         preferredFormat: StreamFormat = StreamFormat.AUTO,
     ): List<String> {
+        val direct = item.streamUrl?.takeIf(String::isNotBlank)
+        if (credentials.isM3u || direct != null) {
+            if (direct == null) return emptyList()
+            return buildList {
+                add(direct)
+                credentials.alternateServers.forEach { host ->
+                    M3uParser.rewriteHost(direct, host)?.let { if (it !in this) add(it) }
+                }
+            }
+        }
+        val servers = buildList {
+            ProviderUrl.normalize(credentials.server).let(::add)
+            credentials.alternateServers.forEach { value ->
+                runCatching { ProviderUrl.normalize(value) }.getOrNull()?.let { if (it !in this) add(it) }
+            }
+        }
+        return servers.flatMap { server ->
+            candidatesForServer(credentials.copy(server = server), item, preferredFormat)
+        }.distinct()
+    }
+
+    private fun candidatesForServer(
+        credentials: Credentials,
+        item: CatalogItem,
+        preferredFormat: StreamFormat,
+    ): List<String> {
         val server = credentials.server.trim().trimEnd('/')
         val user = credentials.username.encodePathSegment()
         val pass = credentials.password.encodePathSegment()

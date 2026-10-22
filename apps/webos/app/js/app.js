@@ -12,6 +12,17 @@
     });
   }
 
+  function maskPlaylistUrl(value) {
+    var raw = String(value || '').trim();
+    if (!raw) return 'Not configured';
+    try {
+      var url = new URL(raw);
+      return url.protocol + '//' + url.host + '/…';
+    } catch (_) {
+      return 'Configured playlist';
+    }
+  }
+
   function uiIcon(name, className) {
     className = className || 'ui-icon';
     var body = '';
@@ -432,16 +443,24 @@
       this.destroyVirtualGrid();
       var credentials = credentialsOverride || this.state.credentials || {};
       var settings = Object.assign({}, this.state.settings || {}, settingsOverride || {});
+      var sourceType = (credentials.sourceType || credentials.source_type) === 'm3u' ? 'm3u' : 'xtream';
+      var alternateHosts = Array.isArray(credentials.alternateServers) ? credentials.alternateServers.join('\n') : '';
+      var xtreamHidden = sourceType === 'm3u' ? ' hidden' : '';
+      var m3uHidden = sourceType === 'm3u' ? '' : ' hidden';
       this.root.innerHTML = '<section class="screen login-screen">' +
         '<div class="login-brand"><div class="brand-lockup"><img class="brand-wordmark" src="assets/xtreamlytv-wordmark.svg" alt="XtreamlyTV"><span>Live · Movies · Series</span></div>' +
-        '<p>A fast, remote-first Xtream player designed for large provider libraries and LG webOS televisions.</p>' +
-        '<div class="feature-pills"><span class="feature-pill">Virtualized catalogs</span><span class="feature-pill">Lazy loading</span><span class="feature-pill">Stream fallback</span><span class="feature-pill">Resume playback</span><span class="feature-pill">No tracking</span></div></div>' +
+        '<p>A fast, remote-first IPTV player designed for large provider libraries and LG webOS televisions.</p>' +
+        '<div class="feature-pills"><span class="feature-pill">Xtream + M3U</span><span class="feature-pill">Virtualized catalogs</span><span class="feature-pill">Stream recovery</span><span class="feature-pill">Resume playback</span><span class="feature-pill">No tracking</span></div></div>' +
         '<form id="loginForm" class="login-card">' +
-        '<h2>Connect your provider</h2><div class="sub">Enter the Xtream credentials supplied by your IPTV service.</div>' +
+        '<h2>Connect your provider</h2><div class="sub">Use an Xtream account or load an M3U playlist URL.</div>' +
         (error ? '<div class="form-error">' + escapeHtml(error) + '</div>' : '') +
-        '<label class="field"><span>Server URL</span><input id="loginServer" class="focusable" name="server" type="url" enterkeyhint="next" value="' + escapeHtml(credentials.server || '') + '" placeholder="https://provider.example:443" autocomplete="off"></label>' +
+        '<label class="field"><span>Source type</span><select id="loginSourceType" class="focusable" name="sourceType"><option value="xtream"' + (sourceType === 'xtream' ? ' selected' : '') + '>Xtream account</option><option value="m3u"' + (sourceType === 'm3u' ? ' selected' : '') + '>M3U / M3U+ playlist</option></select></label>' +
+        '<div id="xtreamFields"' + xtreamHidden + '><label class="field"><span>Server URL</span><input id="loginServer" class="focusable" name="server" type="url" enterkeyhint="next" value="' + escapeHtml(credentials.server || '') + '" placeholder="https://provider.example:443" autocomplete="off"></label>' +
         '<label class="field"><span>Username</span><input id="loginUsername" class="focusable" name="username" enterkeyhint="next" value="' + escapeHtml(credentials.username || '') + '" autocomplete="off"></label>' +
         '<label class="field"><span>Password</span><input id="loginPassword" class="focusable" name="password" type="password" enterkeyhint="done" value="' + escapeHtml(credentials.password || '') + '" autocomplete="off"></label>' +
+        '<label class="field"><span>Alternate hosts (optional, one per line)</span><textarea id="loginXtreamAlternates" class="focusable" name="xtreamAlternates" rows="2" placeholder="https://backup.example:443">' + escapeHtml(alternateHosts) + '</textarea></label></div>' +
+        '<div id="m3uFields"' + m3uHidden + '><label class="field"><span>Playlist URL</span><input id="loginPlaylist" class="focusable" name="playlistUrl" type="url" enterkeyhint="next" value="' + escapeHtml(credentials.playlistUrl || credentials.playlist_url || '') + '" placeholder="https://provider.example/playlist.m3u" autocomplete="off"></label>' +
+        '<label class="field"><span>Alternate hosts (optional, one per line)</span><textarea id="loginAlternates" class="focusable" name="alternateHosts" rows="2" placeholder="https://backup.example:443">' + escapeHtml(alternateHosts) + '</textarea></label></div>' +
         '<div class="field-row"><label class="field"><span>Live stream format</span><select class="focusable" name="streamFormat"><option value="auto"' + (settings.streamFormat === 'auto' || !settings.streamFormat ? ' selected' : '') + '>Automatic fallback</option><option value="m3u8"' + (settings.streamFormat === 'm3u8' ? ' selected' : '') + '>HLS (.m3u8)</option><option value="ts"' + (settings.streamFormat === 'ts' ? ' selected' : '') + '>MPEG-TS (.ts)</option></select></label>' +
         '<label class="field"><span>API bridge (optional)</span><input class="focusable" name="apiProxy" value="' + escapeHtml(settings.apiProxy || '') + '" placeholder="http://unraid.local:8787"></label></div>' +
         '<div class="button-row"><button id="loginConnect" class="primary-button focusable" type="submit">Connect</button><button class="secondary-button focusable" type="button" id="demoButton">Explore demo</button></div>' +
@@ -449,11 +468,27 @@
         '</form></section>';
 
       var self = this;
+      var sourceSelect = document.getElementById('loginSourceType');
+      function refreshSourceFields() {
+        var m3u = sourceSelect && sourceSelect.value === 'm3u';
+        var xtreamFields = document.getElementById('xtreamFields');
+        var m3uFields = document.getElementById('m3uFields');
+        if (xtreamFields) xtreamFields.hidden = m3u;
+        if (m3uFields) m3uFields.hidden = !m3u;
+        XtreamlyTVNavigation.invalidate();
+      }
+      if (sourceSelect) sourceSelect.addEventListener('change', refreshSourceFields);
       document.getElementById('loginForm').addEventListener('submit', function (event) {
         event.preventDefault();
         var form = new FormData(event.currentTarget);
+        var selectedSource = String(form.get('sourceType') || 'xtream');
         self.connect({
-          server: form.get('server'), username: form.get('username'), password: form.get('password')
+          sourceType: selectedSource,
+          server: form.get('server'),
+          username: form.get('username'),
+          password: form.get('password'),
+          playlistUrl: form.get('playlistUrl'),
+          alternateServers: String(form.get(selectedSource === 'm3u' ? 'alternateHosts' : 'xtreamAlternates') || '').split(/[\n,]+/)
         }, { apiProxy: form.get('apiProxy'), streamFormat: form.get('streamFormat'), theme: settings.theme || 'blue' });
       });
       document.getElementById('demoButton').addEventListener('click', function () { self.startDemo(); });
@@ -498,23 +533,48 @@
 
     connect: function (credentials, settings, silent) {
       var self = this;
-      credentials = {
-        server: String(credentials.server || '').trim().replace(/\/+$/, ''),
-        username: String(credentials.username || '').trim(),
-        password: String(credentials.password || '')
-      };
-      if (!credentials.server || !credentials.username || !credentials.password) {
-        this.renderLogin('Server, username, and password are required.');
-        return;
+      credentials = credentials || {};
+      var sourceType = String(credentials.sourceType || credentials.source_type || 'xtream') === 'm3u' ? 'm3u' : 'xtream';
+      if (sourceType === 'm3u') {
+        var playlistUrl = String(credentials.playlistUrl || credentials.playlist_url || '').trim();
+        if (!/^https?:\/\//i.test(playlistUrl)) {
+          this.renderLogin('Enter a complete HTTP or HTTPS M3U playlist URL.', credentials, settings);
+          return;
+        }
+        credentials = {
+          sourceType: 'm3u',
+          playlistUrl: playlistUrl,
+          alternateServers: (Array.isArray(credentials.alternateServers) ? credentials.alternateServers : [])
+            .map(function (value) { return String(value || '').trim().replace(/\/+$/, ''); })
+            .filter(Boolean)
+            .slice(0, 4)
+        };
+      } else {
+        credentials = {
+          sourceType: 'xtream',
+          server: String(credentials.server || '').trim().replace(/\/+$/, ''),
+          username: String(credentials.username || '').trim(),
+          password: String(credentials.password || ''),
+          alternateServers: (Array.isArray(credentials.alternateServers) ? credentials.alternateServers : [])
+            .map(function (value) { return String(value || '').trim().replace(/\/+$/, ''); })
+            .filter(Boolean)
+            .slice(0, 4)
+        };
+        if (!credentials.server || !credentials.username || !credentials.password) {
+          this.renderLogin('Server, username, and password are required.', credentials, settings);
+          return;
+        }
+        if (!/^https?:\/\//i.test(credentials.server)) credentials.server = 'http://' + credentials.server;
       }
-      if (!/^https?:\/\//i.test(credentials.server)) credentials.server = 'http://' + credentials.server;
       XtreamlyTVStore.updateSettings(settings || {});
       this.state = XtreamlyTVStore.getState();
       this.applyTheme(this.state.settings.theme || 'blue');
       this.resetCatalog();
       var session = this.sessionGeneration;
-      var candidate = new XtreamlyTVApi(credentials, this.state.settings);
-      this.renderLoading('Connecting and loading category indexes…');
+      var candidate = sourceType === 'm3u'
+        ? new XtreamlyTVM3uApi(credentials, this.state.settings)
+        : new XtreamlyTVApi(credentials, this.state.settings);
+      this.renderLoading(sourceType === 'm3u' ? 'Loading and indexing M3U playlist…' : 'Connecting and loading category indexes…');
       candidate.authenticate().then(function (profile) {
         if (session !== self.sessionGeneration) return null;
         self.api = candidate;
@@ -536,7 +596,7 @@
         self.activeCategory.series = self.firstCategoryId('series');
         self.demo = false;
         self.renderShell('home', self.navigationStates.home || null);
-        if (!self.seriesCategories.length) {
+        if (!self.seriesCategories.length && sourceType !== 'm3u') {
           setTimeout(function () { self.ensureSeriesDiscovery(true); }, 250);
         }
       }).catch(function (error) {
@@ -1988,17 +2048,24 @@
       var self = this;
       var view = document.getElementById('view');
       var settings = this.state.settings;
-      var credentials = this.state.credentials || { server:'', username:'', password:'' };
+      var credentials = this.state.credentials || { sourceType:'xtream', server:'', username:'', password:'' };
+      var sourceType = (credentials.sourceType || credentials.source_type) === 'm3u' ? 'm3u' : 'xtream';
+      var isM3u = sourceType === 'm3u';
       var themes = [
         { id: 'blue', label: 'Blue (default)' }, { id: 'teal', label: 'Teal' }, { id: 'gray', label: 'Graphite' }, { id: 'purple', label: 'Purple' }, { id: 'pink', label: 'Pink' }
       ];
       var maskedPassword = credentials.password ? '••••••••' : 'Not set';
+      var alternateHosts = Array.isArray(credentials.alternateServers) ? credentials.alternateServers.join('\n') : '';
+      var providerSummary = isM3u
+        ? '<div><span>Source</span><strong>M3U playlist</strong></div><div><span>Playlist</span><strong>' + escapeHtml(maskPlaylistUrl(credentials.playlistUrl || credentials.playlist_url)) + '</strong></div><div><span>Alternate hosts</span><strong>' + escapeHtml(String((credentials.alternateServers || []).length)) + '</strong></div>'
+        : '<div><span>Source</span><strong>Xtream account</strong></div><div><span>Server</span><strong>' + escapeHtml(credentials.server || 'Not configured') + '</strong></div><div><span>Username</span><strong>' + escapeHtml(credentials.username || 'Not configured') + '</strong></div><div><span>Password</span><strong>' + maskedPassword + '</strong></div><div><span>Alternate hosts</span><strong>' + escapeHtml(String((credentials.alternateServers || []).length)) + '</strong></div>';
       view.innerHTML = '<div class="scroll-view"><div class="settings-grid">' +
-        '<section class="settings-card provider-card-wide"><h3>Provider</h3><p>Your saved Xtream connection. Select Edit provider only when you want to change the fields.</p><div class="provider-summary"><div><span>Server</span><strong>' + escapeHtml(credentials.server || 'Not configured') + '</strong></div><div><span>Username</span><strong>' + escapeHtml(credentials.username || 'Not configured') + '</strong></div><div><span>Password</span><strong>' + maskedPassword + '</strong></div></div><div class="settings-actions provider-summary-actions"><button id="editProvider" class="primary-button focusable">Edit provider</button><button id="signOut" class="danger-button focusable">Disconnect provider</button></div><div id="providerEditor" class="provider-editor" hidden><div class="provider-settings-grid"><label class="field provider-server"><span>Server URL</span><input id="providerServer" class="focusable" type="url" value="' + escapeHtml(credentials.server || '') + '" autocomplete="off"></label><label class="field"><span>Username</span><input id="providerUsername" class="focusable" value="' + escapeHtml(credentials.username || '') + '" autocomplete="off"></label><label class="field"><span>Password</span><input id="providerPassword" class="focusable" type="password" value="' + escapeHtml(credentials.password || '') + '" autocomplete="off"></label></div><div class="settings-actions"><button id="saveProvider" class="primary-button focusable">Save and reconnect</button><button id="cancelProviderEdit" class="secondary-button focusable">Cancel</button></div></div></section>' +
+        '<section class="settings-card provider-card-wide"><h3>Provider</h3><p>Your saved source. Credentials and playlist details stay on this TV. Select Edit provider only when you want to change the fields.</p><div class="provider-summary">' + providerSummary + '</div><div class="settings-actions provider-summary-actions"><button id="editProvider" class="primary-button focusable">Edit provider</button><button id="signOut" class="danger-button focusable">Disconnect provider</button></div><div id="providerEditor" class="provider-editor" hidden><label class="field"><span>Source type</span><select id="providerSourceType" class="focusable"><option value="xtream"' + (!isM3u ? ' selected' : '') + '>Xtream account</option><option value="m3u"' + (isM3u ? ' selected' : '') + '>M3U / M3U+ playlist</option></select></label><div id="providerXtreamFields"' + (isM3u ? ' hidden' : '') + '><div class="provider-settings-grid"><label class="field provider-server"><span>Server URL</span><input id="providerServer" class="focusable" type="url" value="' + escapeHtml(credentials.server || '') + '" autocomplete="off"></label><label class="field"><span>Username</span><input id="providerUsername" class="focusable" value="' + escapeHtml(credentials.username || '') + '" autocomplete="off"></label><label class="field"><span>Password</span><input id="providerPassword" class="focusable" type="password" value="' + escapeHtml(credentials.password || '') + '" autocomplete="off"></label></div><label class="field"><span>Alternate hosts (optional, one per line)</span><textarea id="providerXtreamAlternates" class="focusable" rows="2">' + escapeHtml(alternateHosts) + '</textarea></label></div>' +
+        '<div id="providerM3uFields"' + (!isM3u ? ' hidden' : '') + '><label class="field"><span>Playlist URL</span><input id="providerPlaylist" class="focusable" type="url" value="' + escapeHtml(credentials.playlistUrl || credentials.playlist_url || '') + '" autocomplete="off"></label><label class="field"><span>Alternate hosts (optional, one per line)</span><textarea id="providerAlternates" class="focusable" rows="2">' + escapeHtml(alternateHosts) + '</textarea></label></div><div class="settings-actions"><button id="saveProvider" class="primary-button focusable">Save and reconnect</button><button id="cancelProviderEdit" class="secondary-button focusable">Cancel</button></div></div></section>' +
         '<section class="settings-card theme-card-wide"><h3>Appearance</h3><p>Choose a skin. The layout stays identical while the background, panels, focus ring, and highlights change hue.</p><div class="theme-picker">' + themes.map(function (theme) { return '<button class="theme-choice focusable ' + (settings.theme === theme.id ? 'active' : '') + '" data-theme-choice="' + theme.id + '"><i class="theme-preview theme-' + theme.id + '"></i><span>' + theme.label + '</span><b>' + (settings.theme === theme.id ? '✓' : '') + '</b></button>'; }).join('') + '</div></section>' +
         '<section class="settings-card"><h3>Playback compatibility</h3><p>Automatic mode tries HLS and MPEG-TS. If audio starts without video, XtreamlyTV retries the alternate container.</p><label class="field"><span>Preferred live format</span><select id="formatSetting" class="focusable"><option value="auto"' + (settings.streamFormat === 'auto' || !settings.streamFormat ? ' selected' : '') + '>Automatic fallback</option><option value="m3u8"' + (settings.streamFormat === 'm3u8' ? ' selected' : '') + '>HLS first</option><option value="ts"' + (settings.streamFormat === 'ts' ? ' selected' : '') + '>MPEG-TS first</option></select></label><button id="savePlayback" class="primary-button focusable">Save playback</button></section>' +
         '<section class="settings-card"><h3>Performance</h3><p>Only visible cards are added to the DOM. Category data is cached temporarily to make back-and-forth browsing quick without consuming excessive TV memory.</p><label class="field"><span>Cached categories per library</span><select id="cacheSetting" class="focusable"><option value="2"' + (Number(settings.maxCachedCategories || 3) === 2 ? ' selected' : '') + '>2 — lowest memory</option><option value="3"' + (Number(settings.maxCachedCategories || 3) === 3 ? ' selected' : '') + '>3 — balanced</option><option value="5"' + (Number(settings.maxCachedCategories || 3) === 5 ? ' selected' : '') + '>5 — faster revisits</option></select></label><button id="savePerformance" class="primary-button focusable">Save performance</button><button id="clearCatalogCache" class="secondary-button focusable settings-secondary">Clear catalog cache</button></section>' +
-        '<section class="settings-card"><h3>API bridge</h3><p>Optional authenticated local bridge for Xtream servers that do not permit CORS requests from a TV web app.</p><label class="field"><span>Bridge URL</span><input id="proxySetting" class="focusable" value="' + escapeHtml(settings.apiProxy || '') + '" placeholder="http://unraid.local:8787"></label><label class="field"><span>Bridge token</span><input id="proxyTokenSetting" class="focusable" type="password" value="' + escapeHtml(settings.apiProxyToken || '') + '" autocomplete="off"></label><button id="saveProxy" class="primary-button focusable">Save bridge</button></section>' +
+        '<section class="settings-card"><h3>API bridge</h3><p>Optional authenticated local bridge for Xtream servers or M3U hosts that do not permit CORS requests from a TV web app.</p><label class="field"><span>Bridge URL</span><input id="proxySetting" class="focusable" value="' + escapeHtml(settings.apiProxy || '') + '" placeholder="http://unraid.local:8787"></label><label class="field"><span>Bridge token</span><input id="proxyTokenSetting" class="focusable" type="password" value="' + escapeHtml(settings.apiProxyToken || '') + '" autocomplete="off"></label><button id="saveProxy" class="primary-button focusable">Save bridge</button></section>' +
         '<section class="settings-card"><h3>Catalog diagnostics</h3><p>Loaded in memory: ' + this.loadedCount('live').toLocaleString() + ' channels, ' + this.loadedCount('movies').toLocaleString() + ' movies, and ' + this.loadedCount('series').toLocaleString() + ' series. Provider catalogs remain category-scoped so the full library is never loaded into TV memory at once.</p><div class="diagnostic-pill">Virtual rendering active</div><div class="diagnostic-pill">Series discovery: ' + escapeHtml(this.seriesDiscovery) + '</div></section>' +
         '<section class="settings-card"><h3>About XtreamlyTV</h3><div class="about-list"><div><span>Version</span><strong>' + APP_VERSION + '</strong></div><div><span>Application ID</span><strong>' + APP_ID + '</strong></div><div><span>Platform</span><strong>LG webOS TV</strong></div><div><span>License</span><strong>MIT open source</strong></div><div><span>Content</span><strong>No channels or subscriptions included</strong></div></div></section>' +
         '<section class="settings-card"><h3>Privacy & history</h3><p>XtreamlyTV has no analytics, advertising, or tracking. Provider credentials, favorites, recent items, and resume positions are stored locally on the TV.</p><button id="clearHistory" class="secondary-button focusable">Clear watch history</button></section>' +
@@ -2010,12 +2077,25 @@
           self.toast('Skin changed to ' + button.textContent.replace('✓', '').trim());
         });
       });
+      function refreshProviderEditorFields() {
+        var selected = document.getElementById('providerSourceType');
+        var m3u = selected && selected.value === 'm3u';
+        var xtreamFields = document.getElementById('providerXtreamFields');
+        var m3uFields = document.getElementById('providerM3uFields');
+        if (xtreamFields) xtreamFields.hidden = m3u;
+        if (m3uFields) m3uFields.hidden = !m3u;
+        XtreamlyTVNavigation.invalidate();
+      }
+      var providerSourceType = document.getElementById('providerSourceType');
+      if (providerSourceType) providerSourceType.addEventListener('change', refreshProviderEditorFields);
       document.getElementById('editProvider').addEventListener('click', function () {
         var editor = document.getElementById('providerEditor');
         if (!editor) return;
         editor.hidden = false;
+        refreshProviderEditorFields();
         XtreamlyTVNavigation.invalidate();
-        setTimeout(function () { XtreamlyTVNavigation.focusFirst('#providerServer'); }, 0);
+        var m3u = document.getElementById('providerSourceType').value === 'm3u';
+        setTimeout(function () { XtreamlyTVNavigation.focusFirst(m3u ? '#providerPlaylist' : '#providerServer'); }, 0);
       });
       document.getElementById('cancelProviderEdit').addEventListener('click', function () {
         var editor = document.getElementById('providerEditor');
@@ -2024,10 +2104,18 @@
         XtreamlyTVNavigation.focusFirst('#editProvider');
       });
       document.getElementById('saveProvider').addEventListener('click', function () {
+        var selectedSource = document.getElementById('providerSourceType').value;
         self.connect({
+          sourceType: selectedSource,
           server: document.getElementById('providerServer').value,
           username: document.getElementById('providerUsername').value,
-          password: document.getElementById('providerPassword').value
+          password: document.getElementById('providerPassword').value,
+          playlistUrl: document.getElementById('providerPlaylist').value,
+          alternateServers: String(document.getElementById(
+            document.getElementById('providerSourceType').value === 'm3u'
+              ? 'providerAlternates'
+              : 'providerXtreamAlternates'
+          ).value || '').split(/[\n,]+/)
         }, self.state.settings || {});
       });
       document.getElementById('savePlayback').addEventListener('click', function () { XtreamlyTVStore.updateSettings({ streamFormat: document.getElementById('formatSetting').value }); self.refreshStateAndApi(); self.toast('Playback setting saved'); });
@@ -2042,7 +2130,11 @@
     refreshStateAndApi: function () {
       this.state = XtreamlyTVStore.getState();
       this.applyTheme(this.state.settings.theme || 'blue');
-      if (this.state.credentials) this.api = new XtreamlyTVApi(this.state.credentials, this.state.settings);
+      if (!this.state.credentials) return;
+      var sourceType = this.state.credentials.sourceType || this.state.credentials.source_type;
+      this.api = sourceType === 'm3u'
+        ? new XtreamlyTVM3uApi(this.state.credentials, this.state.settings)
+        : new XtreamlyTVApi(this.state.credentials, this.state.settings);
     },
 
     mediaSubtitle: function (item, type) {
@@ -2053,8 +2145,11 @@
 
     buildPlaybackCandidates: function (item, type) {
       if (this.demo) return [];
-      if (type === 'live') return this.api.getLiveCandidates(item.stream_id, this.providerAllowedFormats());
-      return this.api.getMediaCandidates(type, idOf(item, type), item.container_extension);
+      var resolved = this.api.findItem ? this.api.findItem(item) || item : item;
+      if (type === 'live') {
+        return this.api.getLiveCandidates(resolved && resolved.stream_id || resolved, this.providerAllowedFormats());
+      }
+      return this.api.getMediaCandidates(type, resolved, item.container_extension);
     },
 
     buildChannelSwitchList: function (item, requested) {
@@ -2343,11 +2438,31 @@
     startPlaybackWatchdog: function (video) {
       var self = this;
       clearTimeout(this.playbackWatchdog);
-      this.playbackWatchdog = setTimeout(function () {
-        if (!self.playerOpen || !video || video.paused) return;
-        var audioOnly = video.videoWidth === 0 && video.videoHeight === 0 && (isFinite(video.currentTime) ? video.currentTime > 0 : Date.now() - self.playbackStartedAt > 10000);
-        if (audioOnly) self.tryNextPlaybackCandidate('Audio was detected without a video picture.');
-      }, 10000);
+      function check() {
+        self.playbackWatchdog = null;
+        if (!self.playerOpen || !video || video.paused || video.ended || self.playbackSwitching) return;
+        var now = Date.now();
+        var current = isFinite(video.currentTime) ? video.currentTime : 0;
+        if (video.error) {
+          self.tryNextPlaybackCandidate('The current stream failed.');
+          return;
+        }
+        if (self.playerHasPlayed && self.lastPlaybackProgressAt && now - self.lastPlaybackProgressAt > 20000) {
+          self.tryNextPlaybackCandidate('The stream stopped responding.');
+          return;
+        }
+        if (!self.playerHasPlayed && now - self.playbackStartedAt > 20000) {
+          self.tryNextPlaybackCandidate('The stream did not start.');
+          return;
+        }
+        var audioOnly = video.videoWidth === 0 && video.videoHeight === 0 && current > 0 && now - self.playbackStartedAt > 10000;
+        if (audioOnly) {
+          self.tryNextPlaybackCandidate('Audio was detected without a video picture.');
+          return;
+        }
+        self.playbackWatchdog = setTimeout(check, 2000);
+      }
+      this.playbackWatchdog = setTimeout(check, 2000);
     },
 
     tryNextPlaybackCandidate: function (reason) {

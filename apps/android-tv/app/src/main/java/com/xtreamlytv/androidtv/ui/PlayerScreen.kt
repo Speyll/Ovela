@@ -1,6 +1,7 @@
 package com.xtreamlytv.androidtv.ui
 
 import android.content.Context
+import android.os.SystemClock
 import android.view.KeyEvent as AndroidKeyEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -28,6 +29,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,10 +64,15 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.xtreamlytv.androidtv.data.PlaybackFailureKind
+import com.xtreamlytv.androidtv.data.PlaybackRecoveryAction
+import com.xtreamlytv.androidtv.data.PlaybackRecoveryPolicy
+import com.xtreamlytv.androidtv.data.PlaybackRecoveryState
 import com.xtreamlytv.androidtv.model.ContentType
 import com.xtreamlytv.androidtv.model.PlayerRequest
 import com.xtreamlytv.androidtv.ui.theme.palette
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
 
 private const val VOD_AUDIO_ADVANCE_MS = 280
@@ -88,6 +95,11 @@ fun PlayerScreen(
     val subtitleOptionFocus = remember(request.item.id) { FocusRequester() }
     val favoriteOptionFocus = remember(request.item.id) { FocusRequester() }
     var candidateIndex by remember(request.item.id) { mutableIntStateOf(0) }
+    var retrySerial by remember(request.item.id) { mutableIntStateOf(0) }
+    var recoveryAttempts by remember(request.item.id) { mutableIntStateOf(0) }
+    var recovering by remember(request.item.id) { mutableStateOf(false) }
+    var renderedFirstFrame by remember(request.item.id, candidateIndex, retrySerial) { mutableStateOf(false) }
+    val recoveryScope = rememberCoroutineScope()
     var controlsVisible by remember(request.item.id) { mutableStateOf(true) }
     var optionsOpen by remember(request.item.id) { mutableStateOf(false) }
     var playing by remember(request.item.id) { mutableStateOf(true) }
@@ -97,7 +109,59 @@ fun PlayerScreen(
     var subtitlesAvailable by remember(request.item.id) { mutableStateOf(false) }
     var subtitlesEnabled by remember(request.item.id) { mutableStateOf(false) }
 
-    val player = remember(request.item.id, candidateIndex) {
+    fun recover(kind: PlaybackFailureKind, detail: String? = null) {
+        if (recovering) return
+        val action = PlaybackRecoveryPolicy.decide(
+            PlaybackRecoveryState(
+                candidateIndex = candidateIndex,
+                candidateCount = request.urlCandidates.size,
+                retryAttempts = recoveryAttempts,
+                maxRetries = 3,
+            ),
+            kind,
+        )
+        when (action) {
+            is PlaybackRecoveryAction.NextCandidate -> {
+                if (candidateIndex + 1 >= request.urlCandidates.size) {
+                    errorMessage = detail ?: "Unable to play this stream."
+                    recovering = false
+                    return
+                }
+                recovering = true
+                errorMessage = null
+                recoveryScope.launch {
+                    delay(action.delayMs)
+                    recoveryAttempts += 1
+                    retrySerial = 0
+                    candidateIndex += 1
+                    recovering = false
+                }
+            }
+            is PlaybackRecoveryAction.RetryCandidate -> {
+                recovering = true
+                errorMessage = null
+                recoveryScope.launch {
+                    delay(action.delayMs)
+                    recoveryAttempts += 1
+                    retrySerial += 1
+                    recovering = false
+                }
+            }
+            is PlaybackRecoveryAction.GiveUp -> {
+                recovering = false
+                errorMessage = when (kind) {
+                    PlaybackFailureKind.AUTH -> "The provider rejected access to this stream."
+                    PlaybackFailureKind.FORBIDDEN -> "This stream is not authorized."
+                    PlaybackFailureKind.NOT_FOUND -> "This stream is no longer available."
+                    PlaybackFailureKind.UNSUPPORTED -> "This stream uses a format this device cannot play."
+                    PlaybackFailureKind.TRANSIENT, PlaybackFailureKind.UNKNOWN ->
+                        detail ?: "The stream did not become playable. Check the provider and try again."
+                }
+            }
+        }
+    }
+
+    val player = remember(request.item.id, candidateIndex, retrySerial) {
         val renderersFactory = if (request.item.type == ContentType.LIVE) {
             DefaultRenderersFactory(context)
         } else {
@@ -160,6 +224,10 @@ fun PlayerScreen(
                 if (isPlaying) errorMessage = null
             }
 
+            override fun onRenderedFirstFrame() {
+                renderedFirstFrame = true
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) onEnded()
             }
@@ -172,8 +240,8 @@ fun PlayerScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                if (candidateIndex + 1 < request.urlCandidates.size) candidateIndex += 1
-                else errorMessage = error.message ?: "Unable to play this stream."
+                val kind = PlaybackRecoveryPolicy.classifyPlayerErrorCode(error.errorCode)
+                recover(kind, error.message ?: "Unable to play this stream.")
             }
         }
         player.addListener(listener)
@@ -203,6 +271,43 @@ fun PlayerScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(player, candidateIndex, retrySerial) {
+        val startedAt = SystemClock.elapsedRealtime()
+        var lastAdvanceAt = startedAt
+        var lastPosition = -1L
+        var sawProgress = false
+        var firstFrameObserved = false
+        while (true) {
+            delay(1500L)
+            if (recovering) continue
+            val now = SystemClock.elapsedRealtime()
+            val position = player.currentPosition.coerceAtLeast(0L)
+            if (player.isPlaying) {
+                if (position != lastPosition) {
+                    lastPosition = position
+                    lastAdvanceAt = now
+                    sawProgress = true
+                }
+            }
+            if (renderedFirstFrame && !firstFrameObserved) {
+                firstFrameObserved = true
+                lastAdvanceAt = now
+            }
+            if (!renderedFirstFrame && !sawProgress && now - startedAt > 18_000L &&
+                player.playWhenReady && player.playbackState != Player.STATE_ENDED
+            ) {
+                recover(PlaybackFailureKind.TRANSIENT, "The stream did not start. Check the provider connection.")
+                break
+            }
+            if ((renderedFirstFrame || sawProgress) && now - lastAdvanceAt > 15_000L &&
+                player.playWhenReady && player.playbackState != Player.STATE_ENDED
+            ) {
+                recover(PlaybackFailureKind.TRANSIENT, "The stream stopped responding. Reconnecting…")
+                break
+            }
+        }
     }
 
     LaunchedEffect(player) {
@@ -352,6 +457,17 @@ fun PlayerScreen(
             )
         }
 
+        if (recovering) {
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .background(Color(0xE6071014), RoundedCornerShape(14.dp))
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+            ) {
+                Text("Recovering playback…", color = Color.White, fontSize = 13.sp)
+            }
+        }
+
         errorMessage?.let { message ->
             Box(
                 Modifier
@@ -366,6 +482,7 @@ fun PlayerScreen(
 }
 
 @Suppress("DEPRECATION")
+@androidx.annotation.OptIn(UnstableApi::class)
 private fun pcmVodRenderersFactory(context: Context): DefaultRenderersFactory =
     object : DefaultRenderersFactory(context) {
         override fun buildAudioSink(
@@ -387,6 +504,7 @@ private fun pcmVodRenderersFactory(context: Context): DefaultRenderersFactory =
  * video-processing compensation path. Dropping PCM only at each new stream
  * keeps the correction stable without changing playback speed or Live TV.
  */
+@androidx.annotation.OptIn(UnstableApi::class)
 private class VodAudioAdvanceProcessor(
     private val advanceMs: Int,
 ) : BaseAudioProcessor() {
