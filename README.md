@@ -152,6 +152,17 @@ tag never starts it. It requires the repository secrets
 `ANDROID_KEY_PASSWORD`, and fails before building if any is missing. It is
 optional: the manual procedure above needs no Actions secrets.
 
+## Website
+
+The landing page lives in `site/` and is deployed by
+`.github/workflows/pages.yml`, independently of the application builds and the
+release workflow. The workflow deploys only when `site/` changes on `main`, or
+when run manually.
+
+One-time setup: repository **Settings → Pages → Build and deployment →
+Source: GitHub Actions**. The page is then served at
+`https://speyll.github.io/Ovela/`. No custom domain is configured.
+
 ## Licence
 
 Apache License 2.0. Ovela is Copyright 2026 Ovela Contributors; see

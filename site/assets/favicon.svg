@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Ovela">
+  <rect width="64" height="64" rx="14" fill="#0e1015"/>
+  <g transform="translate(8.8 11) scale(0.4)">
+    <path d="M 46 3 L 27 10 L 9 27 L 2 47 L 5 68 L 21 89 L 35 97 L 50 101 L 79 98 L 94 90 L 109 71 L 112 61 L 109 34 L 90 13 L 70 15 L 88 38 L 88 62 L 70 86 L 56 92 L 33 77 L 27 66 L 27 40 L 33 28 L 46 16 L 60 10 L 81 8 L 67 3 Z" fill="#FAF4EB" fill-rule="evenodd"/>
+  </g>
+</svg>
