@@ -1,6 +1,7 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkMode, emitGenerated, reportDrift } from './generated-file.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const config = JSON.parse(await readFile(path.join(root, 'packages/category-classification.json'), 'utf8'));
@@ -36,10 +37,10 @@ const lines = [
   ')',
   '',
 ];
-await writeFile(
-  path.join(root, 'apps/android-tv/app/src/main/java/io/github/speyll/ovela/ui/CategoryClassificationRules.kt'),
-  lines.join('\n'),
-);
+const drifted = [];
+const rulesPath = path.join(root, 'apps/android-tv/app/src/main/java/io/github/speyll/ovela/ui/CategoryClassificationRules.kt');
+const staleRules = await emitGenerated(rulesPath, lines.join('\n'));
+if (staleRules) drifted.push(staleRules);
 
 const corePath = path.join(root, 'packages/core-web/src/core.js');
 let core = await readFile(corePath, 'utf8');
@@ -56,5 +57,11 @@ const block = [
   end,
 ].join('\n');
 core = core.replace(pattern, block);
-await writeFile(corePath, core);
-console.log('Generated Android and web category classification rules.');
+const staleCore = await emitGenerated(corePath, core);
+if (staleCore) drifted.push(staleCore);
+reportDrift(drifted);
+console.log(
+  checkMode
+    ? 'Category classification outputs match packages/category-classification.json.'
+    : 'Generated Android and web category classification rules.',
+);

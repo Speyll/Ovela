@@ -7,15 +7,15 @@
 (function () {
   'use strict';
 
-  var App = window.OvelaApp || window.TVeeApp;
-  var Store = window.OvelaStore || window.TVeeStore;
+  var App = window.OvelaApp;
+  var Store = window.OvelaStore;
   if (!App || !Store || App.__v07UiRefreshInstalled) return;
 
   var KEY = { LEFT:37, UP:38, RIGHT:39, DOWN:40, ENTER:13, BACK:461, ESC:27, BACKSPACE:8, CH_UP:427, CH_DOWN:428 };
   var CATEGORY_GROUP_ALL = '__all__';
   var CATEGORY_GROUP_OTHER = '__other__';
   var V = {
-    version:'1.0.0',
+    version:'1.0.1',
     mediaIndex:{ movies:0, series:0 },
     selectedKey:{ movies:'', series:'', live:'' },
     liveIndex:0,
@@ -3046,7 +3046,7 @@ function bindHomeFocusScrolling(home) {
     var inProgressSeries = [];
     var watchedMovies = [];
     var watchedSeries = [];
-    var progressStore = window.OvelaStore || window.TVeeStore;
+    var progressStore = window.OvelaStore;
     recentMovies.forEach(function (item) {
       var id = idOf(item, 'movie');
       var progress = progressStore && progressStore.getProgress ? progressStore.getProgress('movie', id) : null;

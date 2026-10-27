@@ -4,7 +4,7 @@
   var BACK = 461, PLAY = 415, PAUSE = 19, STOP = 413, RED = 403, GREEN = 404;
   var APP_NAME = 'Ovela';
   var APP_ID = 'io.github.speyll.ovela';
-  var APP_VERSION = '1.0.0';
+  var APP_VERSION = '1.0.1';
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>'"]/g, function (char) {
@@ -3163,6 +3163,6 @@
     }
   };
 
-  window.OvelaApp = window.TVeeApp = App;
+  window.OvelaApp = App;
   document.addEventListener('DOMContentLoaded', function () { App.init(); });
 }());

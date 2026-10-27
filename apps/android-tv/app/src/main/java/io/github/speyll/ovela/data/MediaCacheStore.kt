@@ -202,9 +202,7 @@ class MediaCacheStore(context: Context) {
         if (!has(key) || isNull(key)) null else optDouble(key).takeIf { !it.isNaN() }
 
     private companion object {
-        // Historical store name, kept verbatim through the Ovela rename. The
-        // cache is disposable, but reusing the name avoids a needless cold start.
-        const val PREFS_NAME = "xtreamlytv.media-cache.v1"
+        const val PREFS_NAME = "ovela.media-cache.v1"
         const val MAX_MOVIES = 60
         const val MAX_SERIES = 8
         const val MAX_EPISODES_PER_SERIES = 320

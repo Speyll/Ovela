@@ -3,7 +3,7 @@
 
   var nowYear = new Date().getFullYear();
 
-  window.OvelaMock = window.TVeeMock = {
+  window.OvelaMock = {
     profile: {
       user_info: { auth: 1, username: 'demo', status: 'Active', exp_date: '1893456000' },
       server_info: { url: 'demo.local', port: '443', https_port: '443', server_protocol: 'https' }
@@ -108,7 +108,7 @@
     }
   };
 
-  /* Backwards-compatible aliases used by early builds. */
-  window.OvelaMock.categories = window.TVeeMock.categories = window.OvelaMock.liveCategories = window.TVeeMock.liveCategories;
-  window.OvelaMock.streams = window.TVeeMock.streams = window.OvelaMock.liveStreams = window.TVeeMock.liveStreams;
+  /* Short aliases used by the Live TV view. */
+  window.OvelaMock.categories = window.OvelaMock.liveCategories;
+  window.OvelaMock.streams = window.OvelaMock.liveStreams;
 }());

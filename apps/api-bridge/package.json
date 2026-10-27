@@ -1,6 +1,6 @@
 {
   "name": "ovela-api-bridge",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Optional local CORS bridge for the Ovela webOS Xtream client",
   "main": "index.js",
@@ -9,7 +9,7 @@
     "test": "node --test test/*.test.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "license": "Apache-2.0"
 }

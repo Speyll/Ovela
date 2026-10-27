@@ -391,9 +391,7 @@ class LocalStateStore(context: Context) {
         if (!has(key) || isNull(key)) null else optDouble(key).takeIf { !it.isNaN() }
 
     private companion object {
-        // Historical store name, kept verbatim through the Ovela rename so that
-        // existing favourites, progress, and settings survive the update.
-        const val PREFERENCES_NAME = "xtreamlytv.state.v1"
+        const val PREFERENCES_NAME = "ovela.state.v1"
         const val KEY_THEME = "settings.theme"
         const val KEY_STREAM_FORMAT = "settings.streamFormat"
         const val KEY_CACHE_SIZE = "settings.maxCachedCategories"

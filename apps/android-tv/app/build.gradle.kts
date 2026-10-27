@@ -38,8 +38,8 @@ android {
         applicationId = "io.github.speyll.ovela"
         minSdk = 23
         targetSdk = 36
-        versionCode = 1000
-        versionName = "1.0.0"
+        versionCode = 1001
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -63,8 +63,15 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.findByName("release")
-                ?: signingConfigs.getByName("debug")
+            val releaseSigning = signingConfigs.findByName("release")
+            if (releaseSigning == null) {
+                logger.warn(
+                    "Ovela: no release keystore configured (apps/android-tv/keystore.properties or " +
+                        "the OVELA_KEYSTORE_* variables). This release APK is signed with the " +
+                        "per-machine debug key and cannot update builds signed elsewhere.",
+                )
+            }
+            signingConfig = releaseSigning ?: signingConfigs.getByName("debug")
         }
     }
 

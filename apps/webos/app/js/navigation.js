@@ -348,7 +348,7 @@
   }
 
   function favoriteScope(active) {
-    var app = window.OvelaApp || window.TVeeApp;
+    var app = window.OvelaApp;
     if (!app || app.currentView !== 'favorites' || !active || !active.closest) return null;
     return active.closest('.view');
   }
@@ -407,7 +407,7 @@
 
   document.addEventListener('keydown', function (event) {
     if (event.defaultPrevented) return;
-    if ((window.OvelaApp && window.OvelaApp.playerOpen) || (window.TVeeApp && window.TVeeApp.playerOpen)) return;
+    if (window.OvelaApp && window.OvelaApp.playerOpen) return;
     var active = document.activeElement;
     var input = /INPUT|TEXTAREA|SELECT/.test(active && active.tagName);
     if (input && (event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT)) return;
@@ -532,7 +532,7 @@
   }
   window.addEventListener('resize', invalidate);
 
-  window.OvelaNavigation = window.TVeeNavigation = {
+  window.OvelaNavigation = {
     focusFirst:function (selector) {
       var list = focusables(true);
       var el = selector ? document.querySelector(selector) : list[0];

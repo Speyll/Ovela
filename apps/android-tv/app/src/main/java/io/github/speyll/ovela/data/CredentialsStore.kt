@@ -13,9 +13,7 @@ class CredentialsStore(context: Context) {
 
     private val preferences = EncryptedSharedPreferences.create(
         context,
-        // Historical store name, kept verbatim through the Ovela rename. Changing
-        // it would orphan every existing install's encrypted sign-in details.
-        "xtreamlytv.credentials",
+        "ovela.credentials",
         masterKey,
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,

@@ -193,7 +193,7 @@
   }
   function progressKey(type, id) { return String(type || 'movie') + ':' + String(id || ''); }
 
-  window.OvelaStore = window.TVeeStore = {
+  window.OvelaStore = {
     getState: function () { return clone(state); },
     saveCredentials: function (credentials) {
       var changed = selectAccount(Core.providerKey(credentials));

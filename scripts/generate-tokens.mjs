@@ -1,6 +1,7 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkMode, emitGenerated, reportDrift } from './generated-file.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const tokens = JSON.parse(await readFile(path.join(root, 'packages/design-tokens/tokens.json'), 'utf8'));
@@ -54,8 +55,10 @@ const css = `/* Generated from packages/design-tokens/tokens.json. Do not edit b
   `  --focus-duration: ${tokens.motion.focusMs}ms;\n` +
   `}\n`;
 const cssDir = path.join(root, 'apps/webos/app/css');
-await mkdir(cssDir, { recursive: true });
-await writeFile(path.join(cssDir, 'tokens.css'), css);
+if (!checkMode) await mkdir(cssDir, { recursive: true });
+const drifted = [];
+const staleCss = await emitGenerated(path.join(cssDir, 'tokens.css'), css);
+if (staleCss) drifted.push(staleCss);
 
 const kotlin = `// Generated from packages/design-tokens/tokens.json.\n` +
   `package io.github.speyll.ovela.ui.theme\n\n` +
@@ -83,6 +86,12 @@ const kotlin = `// Generated from packages/design-tokens/tokens.json.\n` +
   `    const val CardRadius = ${tokens.layout.cardRadius}\n` +
   `}\n`;
 const ktDir = path.join(root, 'apps/android-tv/app/src/main/java/io/github/speyll/ovela/ui/theme');
-await mkdir(ktDir, { recursive: true });
-await writeFile(path.join(ktDir, 'BrandTokens.kt'), kotlin);
-console.log('Generated webOS CSS and Android Compose design tokens.');
+if (!checkMode) await mkdir(ktDir, { recursive: true });
+const staleKt = await emitGenerated(path.join(ktDir, 'BrandTokens.kt'), kotlin);
+if (staleKt) drifted.push(staleKt);
+reportDrift(drifted);
+console.log(
+  checkMode
+    ? 'Design token outputs match packages/design-tokens/tokens.json.'
+    : 'Generated webOS CSS and Android Compose design tokens.',
+);

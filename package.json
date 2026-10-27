@@ -1,6 +1,6 @@
 {
   "name": "ovela",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Open-source IPTV client for living-room TV platforms.",
   "license": "Apache-2.0",
@@ -12,15 +12,17 @@
     "classify": "node scripts/generate-category-classification.mjs",
     "tokens": "node scripts/generate-tokens.mjs",
     "prepare:apps": "npm run classify && npm run sync:core && npm run tokens",
+    "check:generated": "node scripts/generate-category-classification.mjs --check && node scripts/sync-web-core.mjs --check && node scripts/generate-tokens.mjs --check",
     "check:webos": "node scripts/check-webos.mjs",
+    "check:licenses": "node scripts/check-licenses.mjs",
     "test:core": "node --test packages/core-web/test/*.test.mjs",
     "test:webos": "for test_file in apps/webos/tests/*_smoke.py; do python3 \"$test_file\" || exit 1; done",
     "build:webos": "node scripts/build-webos.mjs",
     "build:android": "node scripts/build-android.mjs",
-    "build": "npm run prepare:apps && npm run check:webos && npm run test:core && npm run build:webos",
+    "build": "npm run prepare:apps && npm run check && npm run build:webos",
     "check:versions": "node scripts/check-versions.mjs",
     "check:android-toolchain": "node scripts/check-android-toolchain.mjs",
-    "check": "npm run prepare:apps && npm run check:versions && npm run check:android-toolchain && npm run check:webos && npm run check:bridge && npm run test:bridge && npm run test:core",
+    "check": "npm run check:generated && npm run check:versions && npm run check:android-toolchain && npm run check:webos && npm run check:bridge && npm run check:licenses && npm run test:bridge && npm run test:core",
     "check:bridge": "node scripts/check-bridge.mjs",
     "test:bridge": "npm --prefix apps/api-bridge test"
   }

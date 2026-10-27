@@ -391,5 +391,5 @@
   window.OvelaM3uApi = M3uApi;
   XtreamApi.normalizeCollection = Core.normalizeCollection;
   XtreamApi.deriveCategories = Core.deriveCategories;
-  window.OvelaApi = window.TVeeApi = XtreamApi;
+  window.OvelaApi = XtreamApi;
 }());
