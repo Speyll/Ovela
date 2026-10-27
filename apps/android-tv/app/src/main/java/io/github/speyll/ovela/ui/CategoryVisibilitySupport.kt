@@ -7,9 +7,9 @@ import io.github.speyll.ovela.model.ContentType
 /**
  * Pure selection helpers for the category visibility screen.
  *
- * The persisted set is never mutated directly by the UI. The screen works on a
- * staged copy, and these helpers make the bulk operations deterministic and
- * unit-testable without Android or Compose.
+ * The screen writes the new set immediately and keeps the previous set as its
+ * undo snapshot, so these helpers stay deterministic and unit-testable without
+ * Android or Compose.
  */
 
 internal const val ALL_CATEGORY_GROUPS = "__all__"
@@ -93,34 +93,6 @@ internal fun setHiddenCategories(
     hidden: Boolean,
 ): Set<String> =
     if (hidden) current + categoryIds else current - categoryIds.toSet()
-
-internal fun changedCategoryCount(persisted: Set<String>, staged: Set<String>): Int =
-    (persisted - staged).size + (staged - persisted).size
-
-internal data class CategoryChangeSummary(
-    val hideCount: Int,
-    val showCount: Int,
-) {
-    val total: Int get() = hideCount + showCount
-}
-
-internal fun categoryChangeSummary(persisted: Set<String>, staged: Set<String>): CategoryChangeSummary =
-    CategoryChangeSummary(
-        hideCount = (staged - persisted).size,
-        showCount = (persisted - staged).size,
-    )
-
-/**
- * A non-empty change becomes one atomic write. The previous persisted set is
- * the undo snapshot, so Apply and Undo never have to reconstruct intent.
- */
-internal data class CategoryApplyPlan(
-    val hidden: Set<String>,
-    val undo: Set<String>,
-)
-
-internal fun categoryApplyPlan(persisted: Set<String>, staged: Set<String>): CategoryApplyPlan? =
-    if (persisted == staged) null else CategoryApplyPlan(hidden = staged, undo = persisted)
 
 internal fun categoryVisibilityMatches(
     categoryId: String,

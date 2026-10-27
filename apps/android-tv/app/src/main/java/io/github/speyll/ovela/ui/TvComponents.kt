@@ -245,6 +245,8 @@ fun TvButton(
                 fontSize = if (touchUi) 12.sp else 10.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

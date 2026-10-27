@@ -1,6 +1,5 @@
 package io.github.speyll.ovela.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -75,18 +74,14 @@ fun CategoryVisibilityScreen(
     var groupKey by remember { mutableStateOf(ALL_CATEGORY_GROUPS) }
     var languageKey by remember { mutableStateOf(ALL_CATEGORY_FACETS) }
     var qualityKey by remember { mutableStateOf(ALL_CATEGORY_FACETS) }
-    var stagedByType by remember { mutableStateOf<Map<ContentType, Set<String>>>(emptyMap()) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
-    var confirmApply by remember { mutableStateOf(false) }
     var focusAfterAction by remember { mutableStateOf<String?>(null) }
-    var lastApplied by remember { mutableStateOf<Pair<ContentType, Set<String>>?>(null) }
+    var lastUndo by remember { mutableStateOf<Pair<ContentType, Set<String>>?>(null) }
 
     val listState = rememberLazyListState()
     val rowFocusers = remember { mutableMapOf<String, FocusRequester>() }
     val firstRowFocus = remember { FocusRequester() }
-    val selectAllFocus = remember { FocusRequester() }
     val actionFocus = remember { FocusRequester() }
-    val confirmFocus = remember { FocusRequester() }
     val liveTypeFocus = remember { FocusRequester() }
     val movieTypeFocus = remember { FocusRequester() }
     val seriesTypeFocus = remember { FocusRequester() }
@@ -119,12 +114,11 @@ fun CategoryVisibilityScreen(
     val hasRealLanguages = languageFacets.any { it.key != UNCLASSIFIED_CATEGORY_FACET }
     val hasRealQualities = qualityFacets.any { it.key != UNCLASSIFIED_CATEGORY_FACET }
     val activeGroup = prefixGroups.firstOrNull { it.key == groupKey }
-    val persistedHidden = state.settings.hiddenCategoryIds(selectedType)
-    val stagedHidden = stagedByType[selectedType] ?: persistedHidden
+    val hiddenIds = state.settings.hiddenCategoryIds(selectedType)
     val normalizedQuery = query.trim()
     val results = remember(
         providerCategories,
-        stagedHidden,
+        hiddenIds,
         normalizedQuery,
         hiddenOnly,
         groupKey,
@@ -135,7 +129,7 @@ fun CategoryVisibilityScreen(
             categoryVisibilityMatches(
                 categoryId = category.id,
                 name = category.name,
-                hidden = category.id in stagedHidden,
+                hidden = category.id in hiddenIds,
                 hiddenOnly = hiddenOnly,
                 query = normalizedQuery,
                 groupKey = groupKey,
@@ -144,12 +138,10 @@ fun CategoryVisibilityScreen(
             )
         }
     }
-    val changeCount = changedCategoryCount(persistedHidden, stagedHidden)
-    val changeSummary = categoryChangeSummary(persistedHidden, stagedHidden)
     val groupIds = activeGroup?.ids.orEmpty()
-    val groupHasVisible = groupIds.any { it !in stagedHidden }
-    val groupHasHidden = groupIds.any { it in stagedHidden }
-    val undoAvailable = lastApplied?.first == selectedType && changeCount == 0
+    val groupHasVisible = groupIds.any { it !in hiddenIds }
+    val groupHasHidden = groupIds.any { it in hiddenIds }
+    val undoAvailable = lastUndo?.first == selectedType
 
     LaunchedEffect(Unit) {
         delay(32L)
@@ -192,54 +184,23 @@ fun CategoryVisibilityScreen(
         focusAfterAction = null
     }
 
-    LaunchedEffect(confirmApply) {
-        if (confirmApply) {
-            delay(24L)
-            runCatching { confirmFocus.requestFocus() }
-        }
-    }
-
-    // Back dismisses the apply confirmation instead of discarding every staged
-    // change and leaving the manager.
-    BackHandler(enabled = confirmApply) { confirmApply = false }
-
-    fun stage(next: Set<String>) {
-        stagedByType = stagedByType + (selectedType to next)
-        confirmApply = false
-        statusMessage = null
-        // A new edit replaces the snapshot: undoing it would discard that edit.
-        lastApplied = null
-    }
-
-    fun applyChanges() {
-        if (changeCount == 0) return
-        if (changeCount > 8 && !confirmApply) {
-            confirmApply = true
-            return
-        }
-        val plan = categoryApplyPlan(persistedHidden, stagedHidden) ?: return
-        viewModel.setProviderCategoriesHidden(selectedType, plan.hidden)
-        stagedByType = stagedByType - selectedType
-        lastApplied = selectedType to plan.undo
-        confirmApply = false
-        statusMessage = "Category visibility saved."
+    fun commit(transform: (Set<String>) -> Set<String>, message: String) {
+        // Read the freshest persisted set so a fast second tap cannot base its
+        // change on the composition that preceded the first write.
+        val current = viewModel.state.value.settings.hiddenCategoryIds(selectedType)
+        val next = transform(current)
+        if (next == current) return
+        viewModel.setProviderCategoriesHidden(selectedType, next)
+        lastUndo = selectedType to current
+        statusMessage = message
         focusAfterAction = results.firstOrNull()?.id
     }
 
-    fun undoLastApply() {
-        val snapshot = lastApplied ?: return
+    fun undoLastChange() {
+        val snapshot = lastUndo ?: return
         viewModel.setProviderCategoriesHidden(snapshot.first, snapshot.second)
-        stagedByType = stagedByType - snapshot.first
-        lastApplied = null
-        confirmApply = false
+        lastUndo = null
         statusMessage = "Category visibility restored."
-        focusAfterAction = results.firstOrNull()?.id
-    }
-
-    fun cancelChanges() {
-        stagedByType = stagedByType - selectedType
-        confirmApply = false
-        statusMessage = "Unsaved changes discarded."
         focusAfterAction = results.firstOrNull()?.id
     }
 
@@ -248,7 +209,6 @@ fun CategoryVisibilityScreen(
         groupKey = ALL_CATEGORY_GROUPS
         languageKey = ALL_CATEGORY_FACETS
         qualityKey = ALL_CATEGORY_FACETS
-        confirmApply = false
         statusMessage = null
     }
 
@@ -265,7 +225,7 @@ fun CategoryVisibilityScreen(
                 .fillMaxSize()
                 .padding(start = horizontalPadding, end = horizontalPadding, top = if (compact) 2.dp else 6.dp),
         ) {
-            val summary = "${results.size} shown · ${stagedHidden.size} hidden · ${providerCategories.size} total"
+            val summary = "${results.size} shown · ${hiddenIds.size} hidden · ${providerCategories.size} total"
             if (compact) {
                 // Narrow landscape: title and counts share one line, both at a
                 // size that never truncates the counts.
@@ -386,7 +346,6 @@ fun CategoryVisibilityScreen(
                     selectedKey = groupKey,
                     onSelect = {
                         groupKey = it
-                        confirmApply = false
                     },
                 )
             } else null
@@ -398,7 +357,6 @@ fun CategoryVisibilityScreen(
                     selectedKey = languageKey,
                     onSelect = {
                         languageKey = it
-                        confirmApply = false
                     },
                 )
             } else null
@@ -410,7 +368,6 @@ fun CategoryVisibilityScreen(
                     selectedKey = qualityKey,
                     onSelect = {
                         qualityKey = it
-                        confirmApply = false
                     },
                 )
             } else null
@@ -433,65 +390,51 @@ fun CategoryVisibilityScreen(
                 resultsCount = results.size,
                 totalCount = providerCategories.size,
                 hiddenOnly = hiddenOnly,
-                changeCount = changeCount,
-                changeSummary = changeSummary,
-                confirmApply = confirmApply,
                 undoAvailable = undoAvailable,
                 activeGroupLabel = activeGroup?.takeIf { groupKey != ALL_CATEGORY_GROUPS }?.label,
                 groupHasVisible = groupHasVisible,
                 groupHasHidden = groupHasHidden,
                 actionFocus = actionFocus,
                 listFocus = firstRowFocus,
-                confirmFocus = confirmFocus,
                 onHideShown = {
-                    stage(setHiddenCategories(stagedHidden, results.map { it.id }, hidden = true))
-                    focusAfterAction = results.firstOrNull()?.id
+                    val ids = results.map { it.id }
+                    commit({ setHiddenCategories(it, ids, hidden = true) }, "Shown categories hidden.")
                 },
                 onShowShown = {
-                    stage(setHiddenCategories(stagedHidden, results.map { it.id }, hidden = false))
-                    focusAfterAction = results.firstOrNull()?.id
+                    val ids = results.map { it.id }
+                    commit({ setHiddenCategories(it, ids, hidden = false) }, "Shown categories restored.")
                 },
                 onToggleHiddenOnly = { hiddenOnly = !hiddenOnly },
                 onHideAll = {
-                    stage(setHiddenCategories(stagedHidden, providerCategories.map { it.id }, hidden = true))
-                    focusAfterAction = results.firstOrNull()?.id
+                    val ids = providerCategories.map { it.id }
+                    commit({ setHiddenCategories(it, ids, hidden = true) }, "All categories hidden.")
                 },
                 onShowAll = {
-                    stage(setHiddenCategories(stagedHidden, providerCategories.map { it.id }, hidden = false))
-                    focusAfterAction = results.firstOrNull()?.id
+                    val ids = providerCategories.map { it.id }
+                    commit({ setHiddenCategories(it, ids, hidden = false) }, "All categories restored.")
                 },
                 onHideGroup = {
-                    stage(setHiddenCategories(stagedHidden, groupIds, hidden = true))
-                    focusAfterAction = results.firstOrNull()?.id
+                    val ids = groupIds
+                    commit({ setHiddenCategories(it, ids, hidden = true) }, "Group hidden.")
                 },
                 onShowGroup = {
-                    stage(setHiddenCategories(stagedHidden, groupIds, hidden = false))
-                    focusAfterAction = results.firstOrNull()?.id
+                    val ids = groupIds
+                    commit({ setHiddenCategories(it, ids, hidden = false) }, "Group restored.")
                 },
-                onCancel = ::cancelChanges,
-                onApply = ::applyChanges,
-                onKeepEditing = { confirmApply = false },
-                onUndo = ::undoLastApply,
+                onUndo = ::undoLastChange,
             )
 
             if (!compact) {
                 Spacer(Modifier.height(if (touchUi) 8.dp else 6.dp))
-                Text(
-                    if (changeCount > 0) {
-                        "$changeCount unsaved · hide ${changeSummary.hideCount} · show ${changeSummary.showCount}"
-                    } else {
-                        "Tap a category to hide or show it."
-                    },
-                    color = if (changeCount > 0) colors.accent else colors.muted,
-                    fontSize = 10.sp,
-                    fontWeight = if (changeCount > 0) FontWeight.Medium else FontWeight.Normal,
-                )
             }
-
-            statusMessage?.let {
-                Spacer(Modifier.height(4.dp))
-                Text(it, color = colors.accent, fontSize = 10.5.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-            }
+            Text(
+                statusMessage ?: "Changes save automatically. Tap a category to hide or show it.",
+                color = if (statusMessage != null) colors.accent else colors.muted,
+                fontSize = if (compact) 9.5.sp else 10.sp,
+                fontWeight = if (statusMessage != null) FontWeight.Medium else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
 
             Spacer(Modifier.height(if (compact) 3.dp else 6.dp))
 
@@ -507,7 +450,7 @@ fun CategoryVisibilityScreen(
                     verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 5.dp),
                 ) {
                     items(results, key = { "$selectedType:${it.id}" }) { category ->
-                        val hidden = category.id in stagedHidden
+                        val hidden = category.id in hiddenIds
                         val key = "$selectedType:${category.id}"
                         val first = category.id == results.first().id
                         val requester = if (first) {
@@ -521,8 +464,10 @@ fun CategoryVisibilityScreen(
                             hidden = hidden,
                             compact = compact,
                             onClick = {
-                                stage(toggleHiddenCategory(stagedHidden, category.id))
-                                focusAfterAction = category.id
+                                commit(
+                                    { toggleHiddenCategory(it, category.id) },
+                                    if (hidden) "Category shown." else "Category hidden.",
+                                )
                             },
                             modifier = Modifier
                                 .focusRequester(requester)
@@ -641,8 +586,8 @@ private fun ManagerFacetStrip(sections: List<FacetSection>) {
 
 /**
  * Every manager action lives in one wrapping block, so nothing can be clipped
- * off the right edge and nothing requires its own vertical scroller. Apply and
- * Cancel lead when there are staged changes; bulk and group actions follow.
+ * off the right edge and nothing requires its own vertical scroller. Edits save
+ * immediately; Undo restores the set from before the last action.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -651,16 +596,12 @@ private fun ManagerActionBlock(
     resultsCount: Int,
     totalCount: Int,
     hiddenOnly: Boolean,
-    changeCount: Int,
-    changeSummary: CategoryChangeSummary,
-    confirmApply: Boolean,
     undoAvailable: Boolean,
     activeGroupLabel: String?,
     groupHasVisible: Boolean,
     groupHasHidden: Boolean,
     actionFocus: FocusRequester,
     listFocus: FocusRequester,
-    confirmFocus: FocusRequester,
     onHideShown: () -> Unit,
     onShowShown: () -> Unit,
     onToggleHiddenOnly: () -> Unit,
@@ -668,75 +609,41 @@ private fun ManagerActionBlock(
     onShowAll: () -> Unit,
     onHideGroup: () -> Unit,
     onShowGroup: () -> Unit,
-    onCancel: () -> Unit,
-    onApply: () -> Unit,
-    onKeepEditing: () -> Unit,
     onUndo: () -> Unit,
 ) {
-    val colors = palette()
     val hasResults = resultsCount > 0
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp),
     ) {
-        if (confirmApply) {
-            Text(
-                "Hide ${changeSummary.hideCount} and show ${changeSummary.showCount} categories? $changeCount total changes.",
-                color = colors.text,
-                fontSize = if (compact) 10.sp else 11.sp,
-                lineHeight = if (compact) 13.sp else 15.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.width(if (compact) 220.dp else 300.dp),
-            )
-            ManagerButton(
-                "Apply changes",
-                onApply,
-                compact,
-                primary = true,
-                enabled = changeCount > 0,
-                focusRequester = confirmFocus,
-            )
-            ManagerButton("Keep editing", onKeepEditing, compact)
-        } else {
-            if (changeCount > 0) {
-                ManagerButton(
-                    label = if (changeCount == 1) "Apply change" else "Apply $changeCount",
-                    onClick = onApply,
-                    compact = compact,
-                    primary = true,
-                )
-                ManagerButton("Cancel", onCancel, compact)
-            }
-            ManagerButton(
-                label = "Hide shown ($resultsCount)",
-                onClick = onHideShown,
-                compact = compact,
-                enabled = hasResults,
-                focusRequester = actionFocus,
-                modifier = if (hasResults) Modifier.focusProperties { down = listFocus } else Modifier,
-            )
-            ManagerButton(
-                label = "Show shown ($resultsCount)",
-                onClick = onShowShown,
-                compact = compact,
-                enabled = hasResults,
-            )
-            ManagerChip(
-                label = if (hiddenOnly) "Hidden only" else "All categories",
-                selected = hiddenOnly,
-                onClick = onToggleHiddenOnly,
-                compact = compact,
-            )
-            ManagerButton("Hide all $totalCount", onHideAll, compact, enabled = totalCount > 0)
-            ManagerButton("Show all $totalCount", onShowAll, compact, enabled = totalCount > 0)
-        }
-        if (activeGroupLabel != null && !confirmApply) {
+        ManagerButton(
+            label = "Hide shown ($resultsCount)",
+            onClick = onHideShown,
+            compact = compact,
+            enabled = hasResults,
+            focusRequester = actionFocus,
+            modifier = if (hasResults) Modifier.focusProperties { down = listFocus } else Modifier,
+        )
+        ManagerButton(
+            label = "Show shown ($resultsCount)",
+            onClick = onShowShown,
+            compact = compact,
+            enabled = hasResults,
+        )
+        ManagerChip(
+            label = if (hiddenOnly) "Hidden only" else "All categories",
+            selected = hiddenOnly,
+            onClick = onToggleHiddenOnly,
+            compact = compact,
+        )
+        ManagerButton("Hide all $totalCount", onHideAll, compact, enabled = totalCount > 0)
+        ManagerButton("Show all $totalCount", onShowAll, compact, enabled = totalCount > 0)
+        if (activeGroupLabel != null) {
             ManagerButton("Hide $activeGroupLabel", onHideGroup, compact, enabled = groupHasVisible)
             ManagerButton("Show $activeGroupLabel", onShowGroup, compact, enabled = groupHasHidden)
         }
-        if (undoAvailable && !confirmApply) {
+        if (undoAvailable) {
             ManagerButton("Undo", onUndo, compact)
         }
     }

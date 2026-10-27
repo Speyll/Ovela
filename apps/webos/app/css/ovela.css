@@ -627,7 +627,6 @@ body .v07-poster:focus {
 .v07-manager-footer {
   margin-top: 12px;
 }
-.v07-manager-changebar,
 .v07-manager-status {
   display: flex;
   align-items: center;
@@ -636,15 +635,6 @@ body .v07-poster:focus {
   padding-top: 12px;
   border-top: 1px solid rgba(255, 255, 255, .06);
 }
-.v07-manager-change {
-  flex: 1;
-  color: var(--muted);
-  font-size: 14px;
-}
-.v07-manager-changebar .primary-button,
-.v07-manager-changebar .secondary-button,
-.v07-manager-confirm .primary-button,
-.v07-manager-confirm .secondary-button,
 .v07-manager-status .secondary-button {
   min-height: 44px;
   height: 44px;
@@ -653,18 +643,6 @@ body .v07-poster:focus {
   font-size: 14px;
   font-weight: 600;
 }
-.v07-manager-confirm {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-  padding: 14px;
-  border: 1px solid rgba(var(--accent-rgb), .18);
-  border-radius: 12px;
-  background: rgba(var(--accent-rgb), .07);
-}
-.v07-manager-confirm strong { font-size: 15px; }
-.v07-manager-confirm span { color: var(--muted); font-size: 13px; }
-.v07-manager-confirm > div { display: flex; gap: 8px; margin-top: 4px; }
 .v07-manager-status {
   color: var(--muted);
   font-size: 14px;

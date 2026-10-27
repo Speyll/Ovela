@@ -12,6 +12,34 @@
     });
   }
 
+  /* Focus a rendered control by comparing data attributes directly. Building a
+     CSS selector from provider or user text needs a complete escaper and is
+     easy to get subtly wrong; a linear attribute match has no escaping rules. */
+  function nodeWithAttributes(root, selector, attributes) {
+    if (!root) return null;
+    var nodes = root.querySelectorAll(selector);
+    for (var i = 0; i < nodes.length; i += 1) {
+      var matches = true;
+      for (var name in attributes) {
+        if (!Object.prototype.hasOwnProperty.call(attributes, name)) continue;
+        if (String(nodes[i].getAttribute(name)) !== String(attributes[name])) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) return nodes[i];
+    }
+    return null;
+  }
+
+  function focusNodeWithAttributes(root, selector, attributes) {
+    setTimeout(function () {
+      var target = nodeWithAttributes(root, selector, attributes);
+      if (!target) return;
+      try { target.focus({ preventScroll:true }); } catch (error) { target.focus(); }
+    }, 0);
+  }
+
   function maskPlaylistUrl(value) {
     var raw = String(value || '').trim();
     if (!raw) return 'Not configured';
@@ -306,7 +334,10 @@
     },
 
     navigationAttributeSelector: function (name, value) {
-      return '[' + name + '="' + String(value == null ? '' : value).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"]';
+      /* CSS.escape handles quotes, backslashes and control characters in one
+         step. The webOS Chromium builds this app targets all provide it. */
+      if (!window.CSS || typeof window.CSS.escape !== 'function') return '[data-ovela-nav-missing]';
+      return '[' + name + '="' + window.CSS.escape(String(value == null ? '' : value)) + '"]';
     },
 
     navigationFocusDescriptor: function (element) {
@@ -1827,8 +1858,8 @@
         var visible = this.favoriteGroups();
         this.favoriteGroupId = visible.length ? visible[0].id : '';
       }
-      var selector = '[data-manager-visibility="' + groupId.replace(/"/g, '\\"') + '"]';
-      this.renderFavoriteManager(selector);
+      this.renderFavoriteManager('#favoriteManagerBack');
+      focusNodeWithAttributes(document, '[data-manager-visibility]', { 'data-manager-visibility':groupId });
       this.toast(index >= 0 ? 'Group shown' : 'Group hidden');
     },
 
@@ -1841,8 +1872,11 @@
       order.splice(to, 0, value);
       OvelaStore.saveFavoriteGroupOrder(order);
       this.state = OvelaStore.getState();
-      var selector = '[data-manager-group="' + String(groupId).replace(/"/g, '\\"') + '"][data-manager-move="' + (delta > 0 ? '1' : '-1') + '"]';
-      this.renderFavoriteManager(selector);
+      this.renderFavoriteManager('#favoriteManagerBack');
+      focusNodeWithAttributes(document, '[data-manager-group][data-manager-move]', {
+        'data-manager-group':groupId,
+        'data-manager-move':delta > 0 ? '1' : '-1'
+      });
       this.toast('Group order saved');
     },
 
@@ -1903,7 +1937,10 @@
       var newList = document.getElementById('favoriteItemManagerList');
       if (newList) newList.scrollTop = scrollTop;
       setTimeout(function () {
-        OvelaNavigation.focusFirst('[data-item-manager-key="' + String(key).replace(/"/g, '\\"') + '"][data-item-manager-move="' + (delta > 0 ? '1' : '-1') + '"]');
+        focusNodeWithAttributes(document, '[data-item-manager-key][data-item-manager-move]', {
+          'data-item-manager-key':key,
+          'data-item-manager-move':delta > 0 ? '1' : '-1'
+        });
       }, 0);
     },
 
@@ -1917,8 +1954,11 @@
       this.favoriteMode = returnMode;
       this.renderFavorites();
       setTimeout(function () {
-        if (returnMode === 'manager') OvelaNavigation.focusFirst('[data-manager-items="' + String(manager.groupId).replace(/"/g, '\\"') + '"]');
-        else OvelaNavigation.focusFirst('#reorderFavoriteItems, [data-favorite-group].active');
+        if (returnMode === 'manager') {
+          focusNodeWithAttributes(document, '[data-manager-items]', { 'data-manager-items':manager.groupId });
+        } else {
+          OvelaNavigation.focusFirst('#reorderFavoriteItems, [data-favorite-group].active');
+        }
       }, 0);
     },
 
@@ -1967,10 +2007,24 @@
       var selected = this.favoriteEditor.itemKeys.indexOf(key) >= 0;
       var renderKind = layoutKind === 'mixed' ? (type === 'live' ? 'live' : type) : layoutKind;
       var html = renderKind === 'live' ? this.channelTileHtml(item) : this.posterCardHtml(item, type);
-      html = html.replace('<button class="', '<button class="favorite-selection-card ' + (selected ? 'selected ' : ''));
-      html = html.replace(/ data-content-type="[^"]*"/, '').replace(/ data-content-id="[^"]*"/, '');
-      html = html.replace('>', ' data-group-item-key="' + escapeHtml(key) + '"><span class="selection-check">✓</span>');
-      return html;
+      /* Add the editor marker and selection state on the parsed element instead
+         of rewriting the generated HTML with regular expressions. The tile
+         markup contains user/provider text, and regex string surgery is both
+         brittle and an incomplete escaping path. */
+      var shell = document.createElement('div');
+      shell.innerHTML = html;
+      var card = shell.firstElementChild;
+      if (!card) return html;
+      card.classList.add('favorite-selection-card');
+      if (selected) card.classList.add('selected');
+      card.removeAttribute('data-content-type');
+      card.removeAttribute('data-content-id');
+      card.setAttribute('data-group-item-key', key);
+      var check = document.createElement('span');
+      check.className = 'selection-check';
+      check.textContent = '✓';
+      card.appendChild(check);
+      return shell.innerHTML;
     },
 
     renderFavoriteEditor: function () {

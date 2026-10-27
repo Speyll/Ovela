@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -212,7 +213,6 @@ private fun NonSeriesDetailScreen(
     val favorite = viewModel.isFavorite(item)
     val progress = state.progress[itemKey(item)]
     val watchFocus = remember(item.id) { FocusRequester() }
-    val backFocus = remember(item.id) { FocusRequester() }
     val detailScope = detailFocusScope(item.id, null)
     val returnFocus = state.focusRequest?.takeIf { it.scope == detailScope }
 
@@ -239,9 +239,13 @@ private fun NonSeriesDetailScreen(
             contentPadding = PaddingValues(bottom = 28.dp),
         ) {
             item(key = "detail:${item.id}") {
-                Box(Modifier.fillMaxWidth().height(heroHeight)) {
-                    HeroBackdrop(rich.backdropUrl ?: item.backdropUrl, Modifier.fillMaxSize(), imageAlpha = .40f)
-                    Canvas(Modifier.fillMaxSize()) {
+                // The hero grows with its copy instead of clipping a fixed
+                // height. In portrait the plot and two action buttons are taller
+                // than the landscape hero, and the old fixed frame pushed the
+                // action row under the phone header.
+                Box(Modifier.fillMaxWidth().heightIn(min = heroHeight)) {
+                    HeroBackdrop(rich.backdropUrl ?: item.backdropUrl, Modifier.matchParentSize(), imageAlpha = .40f)
+                    Canvas(Modifier.matchParentSize()) {
                         drawRect(
                             Brush.horizontalGradient(
                                 colorStops = arrayOf(
@@ -263,8 +267,8 @@ private fun NonSeriesDetailScreen(
                     }
                     Row(
                         Modifier
-                            .fillMaxSize()
-                            .padding(start = horizontal, end = 24.dp, bottom = if (compact) 18.dp else 24.dp),
+                            .fillMaxWidth()
+                            .padding(start = horizontal, end = 24.dp, top = 12.dp, bottom = if (compact) 18.dp else 24.dp),
                         verticalAlignment = Alignment.Bottom,
                     ) {
                         Artwork(rich, Modifier.width(posterWidth).height(posterWidth * 1.5f), live = item.type == ContentType.LIVE)
@@ -315,36 +319,68 @@ private fun NonSeriesDetailScreen(
                                 )
                             }
                             Spacer(Modifier.height(if (compact) 12.dp else 16.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                                TvButton(
-                                    label = when {
-                                        item.type == ContentType.LIVE -> "Watch live"
-                                        progress != null -> "Resume"
-                                        else -> "Watch"
-                                    },
-                                    onClick = { viewModel.play(item) },
-                                    modifier = Modifier.width(if (compact) 112.dp else 126.dp),
-                                    focusRequester = watchFocus,
-                                    onFocused = {
-                                        viewModel.rememberFocusedItem(detailArea(item.id), detailScope, "watch")
-                                    },
-                                )
-                                TvButton(
-                                    label = if (favorite) "♥  Saved" else "♡  Favourite",
-                                    onClick = { viewModel.toggleFavorite(item) },
-                                    modifier = Modifier.width(if (compact) 104.dp else 124.dp),
-                                    style = TvButtonStyle.Secondary,
-                                )
-                                TvButton(
-                                    label = "Back",
-                                    onClick = viewModel::back,
-                                    modifier = Modifier.width(if (compact) 72.dp else 80.dp),
-                                    style = TvButtonStyle.Secondary,
-                                    focusRequester = backFocus,
-                                    onFocused = {
-                                        viewModel.rememberFocusedItem(detailArea(item.id), detailScope, "back")
-                                    },
-                                )
+                            if (touchUi) {
+                                // On a phone the header already owns Back, so the
+                                // detail actions are the two decisions that matter:
+                                // play and favourite. Equal widths keep both labels
+                                // visible on narrow portrait screens.
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(9.dp),
+                                ) {
+                                    TvButton(
+                                        label = when {
+                                            item.type == ContentType.LIVE -> "Watch live"
+                                            progress != null -> "Resume"
+                                            else -> "Watch"
+                                        },
+                                        onClick = { viewModel.play(item) },
+                                        modifier = Modifier.weight(1f),
+                                        focusRequester = watchFocus,
+                                        onFocused = {
+                                            viewModel.rememberFocusedItem(detailArea(item.id), detailScope, "watch")
+                                        },
+                                    )
+                                    TvButton(
+                                        label = if (favorite) "Saved" else "Favourite",
+                                        onClick = { viewModel.toggleFavorite(item) },
+                                        modifier = Modifier.weight(1f),
+                                        style = TvButtonStyle.Secondary,
+                                        leading = if (favorite) "♥" else "♡",
+                                    )
+                                }
+                            } else {
+                                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                                    TvButton(
+                                        label = when {
+                                            item.type == ContentType.LIVE -> "Watch live"
+                                            progress != null -> "Resume"
+                                            else -> "Watch"
+                                        },
+                                        onClick = { viewModel.play(item) },
+                                        modifier = Modifier.width(if (compact) 112.dp else 126.dp),
+                                        focusRequester = watchFocus,
+                                        onFocused = {
+                                            viewModel.rememberFocusedItem(detailArea(item.id), detailScope, "watch")
+                                        },
+                                    )
+                                    TvButton(
+                                        label = if (favorite) "Saved" else "Favourite",
+                                        onClick = { viewModel.toggleFavorite(item) },
+                                        modifier = Modifier.width(if (compact) 112.dp else 124.dp),
+                                        style = TvButtonStyle.Secondary,
+                                        leading = if (favorite) "♥" else "♡",
+                                    )
+                                    TvButton(
+                                        label = "Back",
+                                        onClick = viewModel::back,
+                                        modifier = Modifier.width(if (compact) 72.dp else 80.dp),
+                                        style = TvButtonStyle.Secondary,
+                                        onFocused = {
+                                            viewModel.rememberFocusedItem(detailArea(item.id), detailScope, "back")
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
@@ -372,9 +408,9 @@ private fun SeriesDetailHero(
             else -> 284.dp
         }
         val posterWidth = if (touchUi) 84.dp else 108.dp
-        Box(Modifier.fillMaxWidth().height(heroHeight)) {
-            HeroBackdrop(item.backdropUrl, Modifier.fillMaxSize(), imageAlpha = .46f)
-            Canvas(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxWidth().heightIn(min = heroHeight)) {
+            HeroBackdrop(item.backdropUrl, Modifier.matchParentSize(), imageAlpha = .46f)
+            Canvas(Modifier.matchParentSize()) {
                 drawRect(
                     Brush.horizontalGradient(
                         colorStops = arrayOf(
@@ -388,8 +424,8 @@ private fun SeriesDetailHero(
             }
             Row(
                 Modifier
-                    .fillMaxSize()
-                    .padding(start = if (touchUi) 18.dp else 48.dp, end = 32.dp, bottom = if (touchUi) 18.dp else 22.dp),
+                    .fillMaxWidth()
+                    .padding(start = if (touchUi) 18.dp else 48.dp, end = 32.dp, top = 12.dp, bottom = if (touchUi) 18.dp else 22.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
                 Artwork(item, Modifier.width(posterWidth).height(posterWidth * 1.5f), live = false)
@@ -418,17 +454,31 @@ private fun SeriesDetailHero(
                         modifier = Modifier.fillMaxWidth(.80f),
                     )
                     Spacer(Modifier.height(if (touchUi) 12.dp else 16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    if (touchUi) {
                         TvButton(
-                            label = if (favorite) "♥  Favourited" else "♡  Favourite",
+                            label = if (favorite) "Saved" else "Favourite",
                             onClick = onFavorite,
                             modifier = Modifier
-                                .width(if (touchUi) 138.dp else 124.dp)
+                                .fillMaxWidth()
                                 .then(if (downFocus != null) Modifier.focusProperties { down = downFocus } else Modifier),
                             style = TvButtonStyle.Secondary,
+                            leading = if (favorite) "♥" else "♡",
                             focusRequester = primaryFocus,
                         )
-                        TvButton("Back", onBack, Modifier.width(if (touchUi) 84.dp else 76.dp), TvButtonStyle.Secondary)
+                    } else {
+                        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                            TvButton(
+                                label = if (favorite) "Saved" else "Favourite",
+                                onClick = onFavorite,
+                                modifier = Modifier
+                                    .width(124.dp)
+                                    .then(if (downFocus != null) Modifier.focusProperties { down = downFocus } else Modifier),
+                                style = TvButtonStyle.Secondary,
+                                leading = if (favorite) "♥" else "♡",
+                                focusRequester = primaryFocus,
+                            )
+                            TvButton("Back", onBack, Modifier.width(76.dp), TvButtonStyle.Secondary)
+                        }
                     }
                 }
             }

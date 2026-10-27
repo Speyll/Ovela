@@ -964,9 +964,9 @@ val state: StateFlow<AppUiState> = _state.asStateFlow()
     }
 
     /**
-     * Atomically applies a staged visibility selection. One state update and
-     * one settings write keep a large bulk change from flickering through the
-     * UI or racing the catalog loader.
+     * Atomically applies a visibility selection. One state update and one
+     * settings write keep a bulk change from flickering through the UI or
+     * racing the catalog loader.
      */
     fun setProviderCategoriesHidden(type: ContentType, hiddenIds: Set<String>) {
         if (type == ContentType.EPISODE) return

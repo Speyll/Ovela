@@ -1,7 +1,7 @@
 /* Ovela webOS browsing and interaction layer.
  *
  * Owns the living-room shell, readable category rail, flat Live TV channel
- * list, poster catalog, staged category visibility settings, Favorites
+ * list, poster catalog, automatic category visibility settings, Favorites
  * presentation, and remote-first focus routing.
  */
 (function () {
@@ -312,6 +312,20 @@
     }
   }
 
+  /* Artwork URLs come from provider payloads and from the fallback list stored
+     on the image element. Only hand http(s) and data images back to the DOM. */
+  function safeArtworkSource(value) {
+    var raw = String(value == null ? '' : value).trim();
+    if (!raw) return '';
+    try {
+      var url = new URL(raw, document.baseURI);
+      if (url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'data:') return url.href;
+    } catch (error) {
+      return '';
+    }
+    return '';
+  }
+
   function finishPosterFailure(image) {
     if (!image || !image.parentNode) return;
     image.style.display = 'none';
@@ -333,21 +347,31 @@
     var nextIndex = currentIndex + 1;
 
     if (nextIndex < candidates.length) {
+      var nextSource = safeArtworkSource(candidates[nextIndex]);
+      if (!nextSource) {
+        finishPosterFailure(image);
+        return;
+      }
       image.setAttribute('data-v07-art-index', String(nextIndex));
       image.setAttribute('data-v07-art-retries', '0');
       image.style.display = '';
-      image.src = candidates[nextIndex];
+      image.src = nextSource;
       return;
     }
 
     var retries = Number(image.getAttribute('data-v07-art-retries') || 0);
     if (retries < 1 && candidates.length) {
+      var retrySource = safeArtworkSource(candidates[0]);
+      if (!retrySource) {
+        finishPosterFailure(image);
+        return;
+      }
       image.setAttribute('data-v07-art-index', '0');
       image.setAttribute('data-v07-art-retries', String(retries + 1));
       window.setTimeout(function () {
         if (!image.parentNode) return;
         image.style.display = '';
-        image.src = candidates[0];
+        image.src = retrySource;
       }, watchdog ? 120 : 650);
       return;
     }
@@ -681,9 +705,7 @@
         groupKey:CATEGORY_GROUP_ALL,
         languageKey:OvelaCore.CATEGORY_ALL_FACET,
         qualityKey:OvelaCore.CATEGORY_ALL_FACET,
-        staged:{ live:null, movies:null, series:null },
         status:'',
-        confirm:false,
         undo:null,
         focusAfter:null
       };
@@ -779,14 +801,6 @@
     });
   }
 
-  function managerChangeSummary(kind) {
-    var persisted = hiddenCategoryIds(kind);
-    var staged = managerHidden(kind);
-    var hideCount = staged.filter(function (id) { return persisted.indexOf(id) < 0; }).length;
-    var showCount = persisted.filter(function (id) { return staged.indexOf(id) < 0; }).length;
-    return { hideCount:hideCount, showCount:showCount, total:hideCount + showCount };
-  }
-
   function managerCategories(kind) {
     // Keep provider order. Classification adds metadata and filters; it must
     // never rewrite or reorder the names the provider delivered.
@@ -794,19 +808,36 @@
   }
 
   function managerHidden(kind) {
-    var m = managerState();
-    return m.staged[kind] ? m.staged[kind].slice() : hiddenCategoryIds(kind).slice();
+    return hiddenCategoryIds(kind).slice();
   }
 
   function managerSet(kind, ids) {
     var m = managerState();
-    m.staged[kind] = ids.slice();
-    m.confirm = false;
-    m.status = '';
+    var previous = hiddenCategoryIds(kind).slice();
+    var seen = {};
+    var next = (ids || []).map(function (id) { return String(id); }).filter(function (id) {
+      if (!id || seen[id]) return false;
+      seen[id] = true;
+      return true;
+    });
+    var unchanged = previous.length === next.length && previous.every(function (id) {
+      return next.indexOf(id) >= 0;
+    });
+    if (unchanged) return false;
+    m.undo = { kind:kind, previous:previous };
+    m.status = 'Saved automatically.';
+    setProviderCategoriesHidden(kind, next);
+    return true;
   }
 
-  function managerChangedCount(kind) {
-    return managerChangeSummary(kind).total;
+  function nodeWithAttribute(root, selector, attribute, value) {
+    if (!root) return null;
+    var nodes = root.querySelectorAll(selector);
+    var wanted = String(value);
+    for (var i = 0; i < nodes.length; i += 1) {
+      if (String(nodes[i].getAttribute(attribute)) === wanted) return nodes[i];
+    }
+    return null;
   }
 
   function managerFiltered(kind) {
@@ -830,6 +861,15 @@
     if (!section) return;
     setTimeout(function () {
       var target = section.querySelector(selector);
+      if (!target) return;
+      try { target.focus({ preventScroll:true }); } catch (error) { target.focus(); }
+    }, 0);
+  }
+
+  function managerFocusAttribute(section, selector, attribute, value) {
+    if (!section) return;
+    setTimeout(function () {
+      var target = nodeWithAttribute(section, selector, attribute, value);
       if (!target) return;
       try { target.focus({ preventScroll:true }); } catch (error) { target.focus(); }
     }, 0);
@@ -860,12 +900,11 @@
     Array.prototype.forEach.call(host.querySelectorAll('[data-v07-manager-group]'), function (button) {
       button.addEventListener('click', function () {
         m.groupKey = String(button.getAttribute('data-v07-manager-group') || CATEGORY_GROUP_ALL);
-        m.confirm = false;
         renderCategoryManagerFilters(section);
         renderCategoryManagerRows(section);
         renderCategoryManagerActions(section);
         renderCategoryManagerFooter(section);
-        managerFocus(section, '[data-v07-manager-group="' + m.groupKey.replace(/"/g, '\\"') + '"]');
+        managerFocusAttribute(section, '[data-v07-manager-group]', 'data-v07-manager-group', m.groupKey);
       });
     });
   }
@@ -897,12 +936,11 @@
     Array.prototype.forEach.call(host.querySelectorAll('[' + attribute + ']'), function (button) {
       button.addEventListener('click', function () {
         m[keyName] = String(button.getAttribute(attribute) || allKey);
-        m.confirm = false;
         renderCategoryManagerFilters(section);
         renderCategoryManagerRows(section);
         renderCategoryManagerActions(section);
         renderCategoryManagerFooter(section);
-        managerFocus(section, '[' + attribute + '="' + m[keyName].replace(/"/g, '\\"') + '"]');
+        managerFocusAttribute(section, '[' + attribute + ']', attribute, m[keyName]);
       });
     });
   }
@@ -955,8 +993,9 @@
         else current.push(id);
         managerSet(m.kind, current);
         renderCategoryManagerRows(section);
+        renderCategoryManagerActions(section);
         renderCategoryManagerFooter(section);
-        managerFocus(section, '[data-v07-manager-category="' + id.replace(/"/g, '\\"') + '"]');
+        managerFocusAttribute(section, '[data-v07-manager-category]', 'data-v07-manager-category', id);
       });
     });
   }
@@ -1037,76 +1076,19 @@
     var m = managerState();
     var footer = section && section.querySelector('#v07CategoryFooter');
     if (!footer) return;
-    var summary = managerChangeSummary(m.kind);
-    var changed = summary.total;
-    var html = '';
-    if (changed > 0) {
-      html += '<div class="v07-manager-changebar"><span class="v07-manager-change">' + changed + (changed === 1 ? ' unsaved change' : ' unsaved changes') + ' · hide ' + summary.hideCount + ' · show ' + summary.showCount + '</span>' +
-        '<button type="button" id="v07CategoryCancel" class="secondary-button focusable">Cancel</button>' +
-        '<button type="button" id="v07CategoryApply" class="primary-button focusable">Apply ' + changed + '</button></div>';
-    }
-    if (m.confirm) {
-      html += '<div class="v07-manager-confirm"><strong>Hide ' + summary.hideCount + ' and show ' + summary.showCount + ' categories?</strong>' +
-        '<span>' + changed + ' total changes. Hidden categories disappear from browse, Home and Favourites for this profile.</span>' +
-        '<div><button type="button" id="v07CategoryConfirm" class="primary-button focusable">Apply changes</button>' +
-        '<button type="button" id="v07CategoryKeepEditing" class="secondary-button focusable">Keep editing</button></div></div>';
-    }
-    if (m.status) {
-      html += '<div class="v07-manager-status"><span>' + esc(m.status) + '</span>' +
-        (m.undo && m.undo.kind === m.kind ? '<button type="button" id="v07CategoryUndo" class="secondary-button focusable">Undo</button>' : '') + '</div>';
-    }
-    footer.innerHTML = html;
+    var undo = m.undo && m.undo.kind === m.kind;
+    var message = m.status || 'Changes save automatically. Use Undo to restore the last change.';
+    footer.innerHTML = '<div class="v07-manager-status"><span>' + esc(message) + '</span>' +
+      (undo ? '<button type="button" id="v07CategoryUndo" class="secondary-button focusable">Undo</button>' : '') +
+      '</div>';
 
-    function apply() {
-      var count = managerChangedCount(m.kind);
-      if (!count) return;
-      if (count > 8 && !m.confirm) {
-        m.confirm = true;
-        renderCategoryManagerFooter(section);
-        managerFocus(section, '#v07CategoryConfirm');
-        return;
-      }
-      var previous = hiddenCategoryIds(m.kind).slice();
-      var next = managerHidden(m.kind).slice();
-      setProviderCategoriesHidden(m.kind, next);
-      m.staged[m.kind] = null;
-      m.confirm = false;
-      m.undo = { kind:m.kind, previous:previous };
-      m.status = 'Category visibility saved.';
-      renderCategoryManagerRows(section);
-      renderCategoryManagerActions(section);
-      renderCategoryManagerFooter(section);
-      managerFocus(section, '#v07CategoryRows .v07-category-row');
-      App.toast('Category visibility saved');
-    }
-
-    var applyButton = footer.querySelector('#v07CategoryApply');
-    var confirmButton = footer.querySelector('#v07CategoryConfirm');
-    var cancelButton = footer.querySelector('#v07CategoryCancel');
-    var keepButton = footer.querySelector('#v07CategoryKeepEditing');
     var undoButton = footer.querySelector('#v07CategoryUndo');
-    if (applyButton) applyButton.addEventListener('click', apply);
-    if (confirmButton) confirmButton.addEventListener('click', apply);
-    if (cancelButton) cancelButton.addEventListener('click', function () {
-      m.staged[m.kind] = null;
-      m.confirm = false;
-      m.status = 'Unsaved changes discarded.';
-      renderCategoryManagerRows(section);
-      renderCategoryManagerActions(section);
-      renderCategoryManagerFooter(section);
-      managerFocus(section, '#v07CategoryRows .v07-category-row');
-    });
-    if (keepButton) keepButton.addEventListener('click', function () {
-      m.confirm = false;
-      renderCategoryManagerFooter(section);
-      managerFocus(section, '#v07CategoryRows .v07-category-row');
-    });
     if (undoButton) undoButton.addEventListener('click', function () {
       if (!m.undo) return;
-      setProviderCategoriesHidden(m.undo.kind, m.undo.previous);
+      var snapshot = m.undo;
       m.undo = null;
-      m.staged[m.kind] = null;
-      m.status = 'Changes undone.';
+      setProviderCategoriesHidden(snapshot.kind, snapshot.previous);
+      m.status = 'Category visibility restored.';
       renderCategoryManagerRows(section);
       renderCategoryManagerActions(section);
       renderCategoryManagerFooter(section);
@@ -1132,7 +1114,7 @@
     section.className = 'settings-card v07-category-manager';
     section.innerHTML =
       '<div class="v07-manager-head"><div><h3>Manage categories</h3>' +
-      '<p>Choose which provider categories appear in browse. Changes apply to Live TV, Movies and Series independently.</p></div>' +
+      '<p>Choose which provider categories appear in browse. Changes save automatically; Undo restores the last change. Live TV, Movies and Series are managed independently.</p></div>' +
       '<span id="v07CategorySummary" class="v07-manager-summary"></span></div>' +
       '<div class="v07-manager-tabs">' +
         ['live','movies','series'].map(function (kind) {
@@ -1160,7 +1142,6 @@
         m.groupKey = CATEGORY_GROUP_ALL;
         m.languageKey = OvelaCore.CATEGORY_ALL_FACET;
         m.qualityKey = OvelaCore.CATEGORY_ALL_FACET;
-        m.confirm = false;
         m.status = '';
         m.focusAfter = 'tab:' + m.kind;
         renderBlockedCategorySettings();
@@ -2676,8 +2657,7 @@ function updateMediaCatalog(kind) {
 
     function paint(entries) {
       if (session !== App.sessionGeneration || generation !== V.epgGeneration || App.currentView !== 'live') return;
-      var selector = '[data-v07-epg-id="' + String(id).replace(/"/g, '\\"') + '"]';
-      var current = document.querySelector(selector);
+      var current = nodeWithAttribute(document, '[data-v07-epg-id]', 'data-v07-epg-id', id);
       if (!current) return;
       var html = programBlocks(entries, start, end);
       current.innerHTML = html || '<div class="v07-no-guide">No guide data</div>';
@@ -4093,7 +4073,7 @@ function bindHomeFocusScrolling(home) {
       button.addEventListener('click', function () {
         App.detail.season = button.dataset.season;
         renderV07SeriesDetail();
-        var target = document.querySelector('.v07-series-season-button[data-season="' + button.dataset.season.replace(/"/g, '\\"') + '"]');
+        var target = nodeWithAttribute(document, '.v07-series-season-button[data-season]', 'data-season', button.dataset.season);
         if (target) target.focus();
       });
     });
@@ -4109,7 +4089,7 @@ function bindHomeFocusScrolling(home) {
       }
     }
     if (restoreSeason) {
-      var seasonRestore = document.querySelector('.v07-series-season-button[data-season="' + restoreSeason.replace(/"/g, '\\"') + '"]');
+      var seasonRestore = nodeWithAttribute(document, '.v07-series-season-button[data-season]', 'data-season', restoreSeason);
       if (seasonRestore) {
         seasonRestore.focus();
         return;

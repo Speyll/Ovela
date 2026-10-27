@@ -40,12 +40,6 @@ class CategoryVisibilitySupportTest {
     }
 
     @Test
-    fun changedCountCountsBothDirections() {
-        assertEquals(0, changedCategoryCount(setOf("a"), setOf("a")))
-        assertEquals(2, changedCategoryCount(setOf("a", "b"), setOf("b", "c")))
-    }
-
-    @Test
     fun hiddenOnlyFilterExcludesVisibleRows() {
         assertFalse(categoryVisibilityMatches("news", "News", hidden = false, hiddenOnly = true, query = ""))
         assertTrue(categoryVisibilityMatches("news", "News", hidden = true, hiddenOnly = true, query = ""))
@@ -143,25 +137,5 @@ class CategoryVisibilitySupportTest {
         assertFalse(categoryVisibilityMatches("ar-1", "AR| News", hidden = false, hiddenOnly = true, query = "", groupKey = "AR"))
         assertFalse(categoryVisibilityMatches("ar-1", "AR| News", hidden = false, hiddenOnly = false, query = "", groupKey = "FR"))
         assertTrue(categoryVisibilityMatches("plain", "Plain", hidden = false, hiddenOnly = false, query = "", groupKey = UNRECOGNIZED_CATEGORY_GROUP))
-    }
-
-    @Test
-    fun changeSummaryReportsHideAndShowSeparately() {
-        val summary = categoryChangeSummary(
-            persisted = setOf("a", "b", "c"),
-            staged = setOf("b", "d", "e"),
-        )
-        assertEquals(2, summary.hideCount)
-        assertEquals(2, summary.showCount)
-        assertEquals(4, summary.total)
-    }
-
-    @Test
-    fun applyPlanKeepsThePreviousSetForUndoAndIsEmptyWhenNothingChanged() {
-        assertNull(categoryApplyPlan(setOf("a"), setOf("a")))
-        val plan = categoryApplyPlan(persisted = setOf("a"), staged = setOf("a", "b"))!!
-        assertEquals(setOf("a", "b"), plan.hidden)
-        assertEquals(setOf("a"), plan.undo)
-        assertEquals(setOf("a"), categoryApplyPlan(setOf("a", "b"), setOf("a"))!!.hidden)
     }
 }

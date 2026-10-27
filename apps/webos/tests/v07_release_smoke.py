@@ -84,8 +84,8 @@ def main() -> None:
         page.locator("#catalogSearch").fill("")
         page.wait_for_timeout(180)
 
-        # Category management is inline, staged, and supports select all,
-        # apply, and undo across Live TV, Movies and Series.
+        # Category management is inline and saves immediately, with Undo for
+        # the last change across Live TV, Movies and Series.
         page.evaluate("OvelaApp.renderShell('settings')")
         page.wait_for_selector("#v07BlockedCategories")
         assert page.locator("[data-v07-manager-kind]").count() == 3
@@ -93,13 +93,16 @@ def main() -> None:
         rows = page.locator("#v07CategoryRows .v07-category-row")
         assert rows.first.inner_text().lower().startswith("featured")
         page.locator("#v07CategoryRows .v07-category-row", has_text="News").click()
-        assert "1 unsaved change" in page.locator("#v07CategoryFooter").inner_text()
+        hidden = page.evaluate("OvelaStore.getState().settings.hiddenCatalogCategories")
+        assert hidden["live"] == ["2"], hidden
+        assert "Saved automatically" in page.locator("#v07CategoryFooter").inner_text()
         page.locator("#v07CategorySelectAll").click()
-        assert "6 unsaved changes" in page.locator("#v07CategoryFooter").inner_text()
+        hidden = page.evaluate("OvelaStore.getState().settings.hiddenCatalogCategories")
+        assert len(hidden["live"]) == 6, hidden
         page.locator("#v07CategoryDeselectAll").click()
-        assert "0 unsaved changes" not in page.locator("#v07CategoryFooter").inner_text()
+        hidden = page.evaluate("OvelaStore.getState().settings.hiddenCatalogCategories")
+        assert hidden["live"] == [], hidden
         page.locator("#v07CategoryRows .v07-category-row", has_text="News").click()
-        page.locator("#v07CategoryApply").click()
         hidden = page.evaluate("OvelaStore.getState().settings.hiddenCatalogCategories")
         assert hidden["live"] == ["2"], hidden
         assert page.locator("#v07CategoryUndo").count() == 1
@@ -370,7 +373,7 @@ def main() -> None:
 
         assert errors == []
         browser.close()
-    print("PASS: Ovela Home/catalog, staged category management, Live OK policy, provider failover, stale guards and bounded cache.")
+    print("PASS: Ovela Home/catalog, automatic category management, Live OK policy, provider failover, stale guards and bounded cache.")
 
 
 if __name__ == "__main__":

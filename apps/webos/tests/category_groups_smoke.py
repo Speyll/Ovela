@@ -3,7 +3,7 @@
 Prefixes are whatever providers put before a `|` (language codes, `4K`, region
 names). Bulk actions must be explicit about their scope: the filtered view, the
 entire section, or one selected group. Hidden states outside that scope must not
-change, and Apply / Cancel / Undo keep working.
+change, every edit saves immediately, and Undo restores the previous set.
 """
 from pathlib import Path
 import os
@@ -158,54 +158,41 @@ def main() -> None:
         page.wait_for_timeout(30)
         assert row_names(page) == ["AR| News", "AR| Sport", "AR| Docs", "AR| Kids", "AR| Music", "AR| Local"], row_names(page)
         page.click("#v07CategoryHideGroup")
-        page.wait_for_timeout(30)
-        change_text = page.locator(".v07-manager-change").inner_text()
-        assert "hide 5" in change_text and "show 0" in change_text, change_text
-
-        page.click("#v07CategoryShowGroup")
-        page.wait_for_timeout(30)
-        change_text = page.locator(".v07-manager-change").inner_text()
-        assert "hide 0" in change_text and "show 1" in change_text, change_text
-
-        # Apply the group change, then Undo restores the previous persisted set.
-        page.click("#v07CategoryApply")
         page.wait_for_timeout(40)
-        assert hidden_live(page) == [], hidden_live(page)
-        assert page.locator("#v07CategoryUndo").is_visible()
+        assert set(hidden_live(page)) == {"1", "2", "7", "8", "9", "10"}, hidden_live(page)
+        assert "Saved automatically" in page.locator("#v07CategoryFooter").inner_text()
         page.click("#v07CategoryUndo")
         page.wait_for_timeout(40)
         assert hidden_live(page) == ["2"], hidden_live(page)
 
-        # Filtered scope: search + "Hide shown" must not touch categories outside
-        # the current results. Cancel discards the staged edit.
+        page.click("#v07CategoryShowGroup")
+        page.wait_for_timeout(40)
+        assert hidden_live(page) == [], hidden_live(page)
+        page.click("#v07CategoryUndo")
+        page.wait_for_timeout(40)
+        assert hidden_live(page) == ["2"], hidden_live(page)
+
+        # Filtered scope: search + "Hide shown" saves at once and must not touch
+        # categories outside the current results.
         page.click('[data-v07-manager-group="__all__"]')
         page.fill("#v07CategorySearch", "News")
         page.wait_for_timeout(30)
         assert row_names(page) == ["AR| News", "Plain News"], row_names(page)
         page.click("#v07CategorySelectAll")
-        page.wait_for_timeout(30)
-        change_text = page.locator(".v07-manager-change").inner_text()
-        assert "hide 2" in change_text, change_text
-        page.click("#v07CategoryCancel")
-        page.wait_for_timeout(30)
+        page.wait_for_timeout(40)
+        assert set(hidden_live(page)) == {"1", "2", "6"}, hidden_live(page)
+        page.click("#v07CategoryUndo")
+        page.wait_for_timeout(40)
         assert hidden_live(page) == ["2"], hidden_live(page)
-        assert page.locator(".v07-manager-change").count() == 0
 
-        # More than eight changes needs confirmation. The summary distinguishes
-        # newly hidden categories from categories that will be shown again.
+        # Bulk actions cover the whole section, not just the filtered results.
         page.fill("#v07CategorySearch", "")
         page.wait_for_timeout(30)
         page.click("#v07CategoryHideAll")
-        page.wait_for_timeout(30)
-        assert "Apply 9" in page.locator("#v07CategoryApply").inner_text()
-        page.click("#v07CategoryApply")
-        page.wait_for_timeout(30)
-        confirm_text = page.locator(".v07-manager-confirm strong").inner_text()
-        assert "Hide 9 and show 0" in confirm_text, confirm_text
-        assert "9 total changes" in page.locator(".v07-manager-confirm span").first.inner_text()
-        page.click("#v07CategoryKeepEditing")
-        page.click("#v07CategoryCancel")
-        page.wait_for_timeout(30)
+        page.wait_for_timeout(40)
+        assert len(hidden_live(page)) == 10, hidden_live(page)
+        page.click("#v07CategoryUndo")
+        page.wait_for_timeout(40)
         assert hidden_live(page) == ["2"], hidden_live(page)
 
         # Search and the selected prefix filter combine.
@@ -297,29 +284,31 @@ def main() -> None:
         page.wait_for_timeout(40)
         assert page.eval_on_selector("#v07CategoryRows", "el => el.scrollTop") == 80
         assert page.evaluate("document.activeElement.getAttribute('data-v07-manager-category')") == "4"
-        page.click("#v07CategoryCancel")
-        page.wait_for_timeout(30)
+        # A row tap saves immediately.
+        assert hidden_live(page) == ["4"], hidden_live(page)
+        page.click("#v07CategoryUndo")
+        page.wait_for_timeout(40)
+        assert hidden_live(page) == [], hidden_live(page)
 
-        # Hide one English category, cancel, then apply and undo.
+        # Hide one English category, then restore it and undo both directions.
         page.click('[data-v07-manager-language="en"]')
         page.wait_for_timeout(30)
         assert row_names(page) == ["ENGLISH | News"], row_names(page)
         page.click("#v07CategorySelectAll")
-        page.wait_for_timeout(30)
-        assert "hide 1" in page.locator(".v07-manager-change").inner_text()
-        page.click("#v07CategoryCancel")
-        page.wait_for_timeout(30)
-        assert hidden_live(page) == [], hidden_live(page)
-        page.click("#v07CategorySelectAll")
-        page.click("#v07CategoryApply")
         page.wait_for_timeout(40)
         assert hidden_live(page) == ["1"], hidden_live(page)
         page.click("#v07CategoryUndo")
         page.wait_for_timeout(40)
         assert hidden_live(page) == [], hidden_live(page)
+        page.click("#v07CategorySelectAll")
+        page.wait_for_timeout(40)
+        assert hidden_live(page) == ["1"], hidden_live(page)
+        page.click("#v07CategoryDeselectAll")
+        page.wait_for_timeout(40)
+        assert hidden_live(page) == [], hidden_live(page)
 
-        # Movies: leading full-word aliases, independent quality facets, staged
-        # changes survive a tab switch until Apply (which is scoped).
+        # Movies: leading full-word aliases, independent quality facets, and a
+        # saved state that survives a tab switch.
         page.click('[data-v07-manager-kind="movies"]')
         page.wait_for_timeout(50)
         assert group_labels(page) == ["All 4", "ENGLISH 1", "FRENCH 1", "SPANISH 1", "Other 1"], group_labels(page)
@@ -333,21 +322,19 @@ def main() -> None:
         page.wait_for_timeout(30)
         assert row_names(page) == ["SPANISH FHD"], row_names(page)
         page.click("#v07CategorySelectAll")
-        page.wait_for_timeout(30)
-        assert "hide 1" in page.locator(".v07-manager-change").inner_text()
+        page.wait_for_timeout(40)
+        assert hidden_categories(page, "movies") == ["13"], hidden_categories(page, "movies")
         page.click('[data-v07-manager-kind="live"]')
         page.wait_for_timeout(30)
         page.click('[data-v07-manager-kind="movies"]')
         page.wait_for_timeout(30)
-        assert "hide 1" in page.locator(".v07-manager-change").inner_text()
-        page.click("#v07CategoryApply")
-        page.wait_for_timeout(40)
         assert hidden_categories(page, "movies") == ["13"], hidden_categories(page, "movies")
+        assert page.locator("#v07CategoryUndo").count() == 1
         page.click("#v07CategoryUndo")
         page.wait_for_timeout(40)
         assert hidden_categories(page, "movies") == [], hidden_categories(page, "movies")
 
-        # Series: no leaked live/movie filters, and independent apply.
+        # Series: no leaked live/movie filters, and independent saving.
         page.click('[data-v07-manager-kind="series"]')
         page.wait_for_timeout(50)
         assert group_labels(page) == ["All 4", "DEUTSCH 1", "TURKISH 1", "Other 2"], group_labels(page)
@@ -361,7 +348,6 @@ def main() -> None:
         page.wait_for_timeout(30)
         assert row_names(page) == ["DEUTSCH| Serien"], row_names(page)
         page.click("#v07CategorySelectAll")
-        page.click("#v07CategoryApply")
         page.wait_for_timeout(40)
         assert hidden_categories(page, "series") == ["21"], hidden_categories(page, "series")
         page.click("#v07CategoryUndo")
@@ -390,7 +376,6 @@ def main() -> None:
         assert page.evaluate("!!OvelaApp.catalogCache.live['2']")
         assert page.evaluate("!!OvelaApp.itemLookup['live:1001']")
         page.click('[data-v07-manager-category="2"]')
-        page.click("#v07CategoryApply")
         page.wait_for_timeout(50)
         assert hidden_live(page) == ["2"], hidden_live(page)
         assert page.evaluate("OvelaApp.catalogCache.live['2'] === undefined")
@@ -403,7 +388,6 @@ def main() -> None:
 
         # Showing it again removes the persisted block and reloads normally.
         page.click('[data-v07-manager-category="2"]')
-        page.click("#v07CategoryApply")
         page.wait_for_timeout(50)
         assert hidden_live(page) == [], hidden_live(page)
         page.evaluate("OvelaApp.loadCategory('live', '2')")
