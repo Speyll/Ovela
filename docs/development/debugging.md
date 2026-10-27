@@ -6,7 +6,7 @@ Record:
 
 - Platform and device model
 - OS/webOS version
-- XtreamlyTV version
+- Ovela version
 - Content type: Live, Movie, Series, or Episode
 - Category item count
 - Stream container, when known
@@ -18,7 +18,7 @@ Do not include provider passwords or complete authenticated stream URLs.
 
 ```bash
 ares-device --system-info --device tv1
-ares-inspect --device tv1 --app com.github.xtreamlytv.webos --open
+ares-inspect --device tv1 --app io.github.speyll.ovela --open
 ```
 
 Common webOS failure classes:
@@ -35,7 +35,7 @@ Common webOS failure classes:
 ```bash
 adb shell getprop ro.product.model
 adb shell getprop ro.build.version.release
-adb logcat | grep -E "XtreamlyTV|ExoPlayer|MediaCodec"
+adb logcat | grep -E "Ovela|ExoPlayer|MediaCodec"
 ```
 
 Common Android failure classes:

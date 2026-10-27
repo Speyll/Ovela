@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible XtreamlyTV defect
+description: Report a reproducible Ovela defect
 title: "[Bug]: "
 labels: [bug, needs-triage]
 body:
@@ -13,8 +13,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: XtreamlyTV version
-      placeholder: 0.4.2
+      label: Ovela version
+      placeholder: 1.0.0
     validations:
       required: true
   - type: input

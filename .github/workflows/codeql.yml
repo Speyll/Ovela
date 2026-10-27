@@ -66,7 +66,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: failure() && matrix.language == 'java-kotlin'
         with:
-          name: xtreamlytv-codeql-android-build-log
+          name: ovela-codeql-android-build-log
           path: dist/ci/codeql-android-build.log
           if-no-files-found: ignore
       - uses: github/codeql-action/analyze@v4

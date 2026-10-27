@@ -1,36 +1,50 @@
-# XtreamlyTV
+# Ovela
 
-XtreamlyTV is an open-source, remote-first IPTV client for living-room televisions. It connects to user-supplied Xtream-compatible providers or M3U/M3U+ playlists and presents Live TV, Movies, and Series in a fast, category-scoped interface built for very large catalogs.
+Ovela is an open-source, remote-first IPTV client for living-room televisions.
+It connects to user-supplied Xtream-compatible providers or M3U/M3U+ playlists
+and presents Live TV, Movies, and Series in a fast, category-scoped interface
+built for very large catalogs.
 
-> XtreamlyTV does not provide channels, subscriptions, playlists, or copyrighted media. Use it only with services and content you are authorized to access.
+> Ovela does not provide channels, subscriptions, playlists, or copyrighted
+> media. Use it only with services and content you are authorized to access.
 
 ## Platform status
 
-| Platform | Status | Package | Playback |
+| Platform | Version | Package | Playback |
 |---|---|---|---|
-| LG webOS TV | **0.7.0** | `.ipk` | Native webOS HTML media surface |
-| Android TV / Google TV | **0.7.0**, debug APK for sideloading | `.apk` | AndroidX Media3 ExoPlayer |
+| LG webOS TV | **1.0.0** | `.ipk` | Native webOS media surface |
+| Android TV / Google TV | **1.0.0** | Signed `.apk` for sideloading | AndroidX Media3 ExoPlayer |
 | Local browser demo | Development only | Static files | Browser media support |
 
-Version 0.7.0 brings a living-room UI refresh with category navigation, guide-first Live TV, immersive backdrops, catalog-scoped search, and improved Favorites/provider resilience. Android TV includes the native browsing improvements, searchable category visibility controls, and playback/audio fixes.
+Download packages from
+[GitHub Releases](https://github.com/Speyll/Ovela/releases/latest).
 
-Download the TV packages from [GitHub Releases](https://github.com/joshcoburn/XtreamlyTV/releases/latest). The Android download is explicitly a debug build for sideloading, not a production-signed Play Store release. A differently signed existing installation may require uninstalling first, which removes local app data.
+The Android APK is a release build signed for sideloading. It is not published
+through Google Play. An existing installation signed with a different key must
+be uninstalled first, which removes app data. The webOS package is installed in
+developer mode and is not signed for the LG Content Store.
 
 ## Features
 
 - Xtream account authentication
-- M3U/M3U+ playlist import from a URL on both platforms, plus local playlist import on Android TV
+- M3U/M3U+ playlist import from a URL on both platforms, plus local playlist
+  import on Android TV
 - Explicit alternate-host failover for Xtream and M3U streams
 - Category-scoped Live TV, VOD, and Series browsing
-- Bounded large-catalog navigation with circular categories, five-row EPG, and six-card media rails
-- Favorites virtual categories, custom collections, default A-Z sorting, and editable group management
+- Bounded large-catalog navigation with readable category lists, flat Live TV
+  channels, and poster rails
+- Favorites virtual categories, custom collections, default A-Z sorting, and
+  editable group management
 - Movie and episode resume positions on webOS and Android TV
 - Live HLS/MPEG-TS fallback on both TV platforms
 - Native Media3 playback on Android TV
-- Remote-first navigation and focus states
-- Matching Teal, Graphite, Purple, Pink, and Blue skins on both TV platforms
-- Editable provider settings, catalog cache controls, local history, and privacy controls
-- Optional LAN API bridge for providers that block browser CORS, including an allowlisted M3U playlist endpoint
+- Remote-first navigation and visible focus states
+- A shared graphite/ivory Ovela theme, with saved legacy skin preferences mapped
+  onto it
+- Editable provider settings, catalog cache controls, local history, and privacy
+  controls
+- Optional LAN API bridge for providers that block browser CORS, including an
+  allowlisted M3U playlist endpoint
 - No advertising, analytics, or tracking
 
 ## Monorepo layout
@@ -41,16 +55,19 @@ apps/
   android-tv/     Native Android TV / Google TV app
   api-bridge/     Optional local metadata/CORS bridge
 packages/
-  core-web/       Shared browser/webOS Xtream, M3U, recovery, and persistence primitives
+  core-web/       Shared browser/webOS Xtream, M3U, recovery, and persistence
   contracts/      Platform-neutral JSON schemas and fixtures
   design-tokens/  Shared brand, spacing, color, and motion tokens
   brand/          Canonical project artwork
 scripts/          Build, install, synchronization, and release helpers
 docs/             Architecture, development, testing, and release guides
-.github/           CI, release workflows, templates, and dependency updates
+.github/          CI, release workflows, templates, and dependency updates
 ```
 
-The repository shares provider contracts, brand assets, design tokens, fixtures, and web-compatible domain primitives. Playback and UI shells remain platform-native so each television platform can use its best-supported media engine.
+The repository shares provider contracts, brand assets, design tokens, fixtures,
+and web-compatible domain primitives. Playback and UI shells remain
+platform-native so each television platform can use its best-supported media
+engine.
 
 ## Quick start
 
@@ -62,10 +79,11 @@ The repository shares provider contracts, brand assets, design tokens, fixtures,
 - LG webOS CLI for webOS builds
 - Android Studio or Android SDK/JDK 17 for Android TV builds
 
-Prepare generated platform files:
+Prepare generated platform files and run the fast checks:
 
 ```bash
 npm run prepare:apps
+npm run check:versions
 npm run check:webos
 npm run test:core
 ```
@@ -80,27 +98,30 @@ npm run build:webos
 Output:
 
 ```text
-dist/webos/com.github.xtreamlytv.webos_0.7.0_all.ipk
+dist/webos/io.github.speyll.ovela_1.0.0_all.ipk
 ```
 
 ### Build Android TV
 
+Set up signing once as described in
+[Releasing](docs/releasing.md#android-signing), then:
+
 ```bash
 cd apps/android-tv
-./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease
 ```
 
 Windows:
 
 ```powershell
 cd apps\android-tv
-.\gradlew.bat :app:assembleDebug
+.\gradlew.bat :app:assembleRelease
 ```
 
 Output:
 
 ```text
-apps/android-tv/app/build/outputs/apk/debug/app-debug.apk
+apps/android-tv/app/build/outputs/apk/release/app-release.apk
 ```
 
 ## Documentation
@@ -110,35 +131,37 @@ apps/android-tv/app/build/outputs/apk/debug/app-debug.apk
 - [Build and test on LG webOS](docs/development/webos.md)
 - [Build and test on Android TV / Google TV](docs/development/android-tv.md)
 - [Debugging and diagnostics](docs/development/debugging.md)
-- [Release process](docs/releasing.md)
-- [Roadmap](docs/roadmap.md)
-- [Brand assets](docs/brand.md)
-- [0.7.0 release notes](docs/release-notes/0.7.0.md)
-- [0.6.0 release notes](docs/release-notes/0.6.0.md)
-- [0.5.1 release notes](docs/release-notes/0.5.1.md)
-- [0.5.0 release notes](docs/release-notes/0.5.0.md)
-- [0.4.1 release notes](docs/release-notes/0.4.1.md)
-- [0.4.0 release notes](docs/release-notes/0.4.0.md)
-- [GitHub repository maintenance](docs/github-publishing.md)
+- [Releasing and signing](docs/releasing.md)
+- [Ovela product and parity notes](docs/design/ovela.md)
+- [Ovela asset family](docs/design/ovela-assets.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Privacy](PRIVACY.md)
+- [Changelog](CHANGELOG.md)
 
-## Screenshots
+## Category classification and hidden categories
 
-![XtreamlyTV home screen](docs/screenshots/xtreamlytv-home.png)
+Category names are classified by the shared rule table in
+`packages/category-classification.json`, generated into both clients. Matching
+uses normalized whole tokens, so `EN|`, `ENGLISH` and `English Movies` are
+recognized while `Entertainment` is not. Prefixes are preserved as their own
+group; language, quality/format and provider/region metadata are shown on each
+row and exposed through independent Group, Language and Quality filters. Names
+with several language markers or no reliable match remain under Other /
+Unclassified rather than being guessed.
 
-![Virtualized Live TV browser](docs/screenshots/xtreamlytv-live-virtualized.png)
-
-![Movies library](docs/screenshots/xtreamlytv-movies.png)
-
-![Favorites groups landing page](docs/screenshots/xtreamlytv-favorites.png)
-
-![Favorites group browser](docs/screenshots/xtreamlytv-favorite-group.png)
+Hiding a category removes it from browse, Home and Favourites and drops that
+category's loaded list and derived item references. Favorites, Continue
+Watching, history, progress and the active playback item are kept separately.
+Re-showing it loads the category again on demand. This is category-scoped
+cleanup, not a full-playlist download or a claim of measured RAM, CPU, network
+or storage savings. Artwork already decoded by the platform and provider-side
+data are outside the app's control.
 
 ## Development principles
 
-1. Never fetch a provider's entire catalog unless the API offers no category-scoped alternative.
+1. Never fetch a provider's entire catalog unless the API offers no
+   category-scoped alternative.
 2. Keep remote navigation deterministic and visibly focused.
 3. Use platform-native playback where practical.
 4. Never ship provider credentials, playlists, or copyrighted content.
@@ -147,4 +170,6 @@ apps/android-tv/app/build/outputs/apk/debug/app-debug.apk
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Third-party attributions are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

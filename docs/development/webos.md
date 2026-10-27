@@ -68,19 +68,21 @@ ares-package --no-minify -o dist/webos apps/webos/app
 
 ## Provider sources
 
-XtreamlyTV accepts either an Xtream account or an M3U/M3U+ playlist URL. For M3U, the TV downloads and indexes the playlist locally; playback still goes directly to the stream host. Optional alternate hosts rewrite only the scheme/host/port, preserving the original stream path and query token.
+Ovela accepts either an Xtream account or an M3U/M3U+ playlist URL. For M3U, the TV downloads and indexes the playlist locally; playback still goes directly to the stream host. Optional alternate hosts rewrite only the scheme/host/port, preserving the original stream path and query token.
 
 LG webOS enforces browser CORS on provider requests. If an M3U host does not allow the TV origin, configure the optional [API bridge](../../apps/api-bridge/README.md), add the exact playlist URL to `ALLOWED_PLAYLISTS`, and enter the bridge URL and token in Settings.
 
 ## Install and launch
 
+Developer Mode installs the unsigned IPK directly; custom package signing is not required and the abandoned signing experiments are not used.
+
 ```bash
-ares-launch --device tv1 --close com.github.xtreamlytv.webos
+ares-launch --device tv1 --close io.github.speyll.ovela
 
 ares-install --device tv1 \
-  dist/webos/com.github.xtreamlytv.webos_0.4.2_all.ipk
+  dist/webos/io.github.speyll.ovela_1.0.0_all.ipk
 
-ares-launch --device tv1 com.github.xtreamlytv.webos
+ares-launch --device tv1 io.github.speyll.ovela
 ```
 
 Windows PowerShell helper:
@@ -96,7 +98,7 @@ Repeated installation with the same app ID updates the development app in place.
 Launch the app, then run:
 
 ```bash
-ares-inspect --device tv1 --app com.github.xtreamlytv.webos --open
+ares-inspect --device tv1 --app io.github.speyll.ovela --open
 ```
 
 Useful checks:

@@ -1,61 +1,124 @@
 # Getting started
 
+## Prerequisites
+
+| Tool | Version | Needed for |
+|---|---|---|
+| Git | current | All work |
+| Node.js | 20 or newer | Shared code generation, checks, webOS builds |
+| Python | 3.11 or newer | Browser and webOS smoke tests |
+| LG webOS CLI (`@webos-tools/cli`) | current | Packaging and installing the webOS app |
+| JDK | 17 | Android builds |
+| Android SDK | Platform 36, Build Tools 36.0.0 | Android builds |
+| `adb` | current | Installing on Android TV |
+
+Android Studio is optional. The repository includes a Gradle wrapper.
+
 ## Clone and prepare
 
 ```bash
-git clone https://github.com/YOUR_ACCOUNT/XtreamlyTV.git
-cd XtreamlyTV
+git clone https://github.com/Speyll/Ovela.git
+cd Ovela
 npm run prepare:apps
+```
+
+`prepare:apps` regenerates category classification, the shared web core copies in
+`apps/webos/app/js`, and the design-token output. Do not edit generated files by
+hand.
+
+## Verify the checkout
+
+```bash
+npm run check:versions
+npm run check:android-toolchain
 npm run check:webos
 npm run test:core
 ```
 
-`prepare:apps` performs two generated-source steps:
+The bridge checks require only Node.js:
 
-1. Copies the canonical browser/webOS core from `packages/core-web/src` into the packaged webOS app.
-2. Generates webOS CSS variables and Android Compose colors from `packages/design-tokens/tokens.json`.
-
-Do not edit these generated files directly:
-
-```text
-apps/webos/app/js/core.js
-apps/webos/app/js/api.js
-apps/webos/app/js/store.js
-apps/webos/app/css/tokens.css
-apps/android-tv/app/src/main/java/com/xtreamlytv/androidtv/ui/theme/BrandTokens.kt
+```bash
+npm run check:bridge
+npm run test:bridge
 ```
 
-Edit the canonical package source and rerun `npm run prepare:apps`.
+Browser and webOS smoke tests need Playwright:
 
-## Recommended tools
+```bash
+python3 -m pip install -r apps/webos/tests/requirements.txt
+python3 -m playwright install chromium
+npm run test:webos
+```
 
-- Visual Studio Code for webOS and repository work
-- Android Studio for Android TV
-- Chrome/Chromium for webOS browser smoke testing
-- GitHub CLI for publishing releases
+## Run the browser demo
 
-## Run the webOS demo locally
+The webOS app is a static HTML application. It can be served directly for UI
+work, without packaging:
 
 ```bash
 cd apps/webos/app
 python3 -m http.server 8080
 ```
 
-Open:
+Open `http://localhost:8080`. The browser build is a development surface; final
+playback, focus, and remote behavior must be checked on a television.
 
-```text
-http://localhost:8080/?demo=1
-```
-
-The browser demo validates layout and navigation but does not reproduce every webOS codec, hardware video-plane, or remote-control behavior.
-
-## Run all repository checks
+## Build the webOS package
 
 ```bash
-npm run prepare:apps
-npm run check:webos
-npm run test:core
-CHROMIUM_PATH=/usr/bin/chromium python3 apps/webos/tests/browser_smoke.py
+npm install -g @webos-tools/cli
+npm run build:webos
 ```
 
-On Windows, omit `CHROMIUM_PATH` after installing Playwright's Chromium browser.
+The package is written to `dist/webos/io.github.speyll.ovela_<version>_all.ipk`.
+See [webOS development](development/webos.md) for pairing, installing, and
+inspecting the app on a TV.
+
+## Build the Android app
+
+Debug build:
+
+```bash
+cd apps/android-tv
+./gradlew :app:assembleDebug
+```
+
+Release build requires a signing configuration; see
+[Releasing](releasing.md#android-signing).
+
+```bash
+cd apps/android-tv
+./gradlew :app:assembleRelease
+```
+
+Outputs:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+app/build/outputs/apk/release/app-release.apk
+```
+
+Install with `adb install -r <apk>`. The `-r` flag preserves existing app data
+when the signing key is unchanged.
+
+## Project layout
+
+```text
+apps/webos/          Static webOS application and Playwright smoke tests
+apps/android-tv/     Kotlin/Compose Android TV application
+apps/api-bridge/     Optional LAN CORS/metadata bridge
+packages/core-web/   Shared browser/webOS provider, URL, recovery, store code
+packages/contracts/  JSON schemas and provider fixtures
+packages/design-tokens/  Shared design tokens
+packages/brand/      Canonical artwork and brand notes
+scripts/             Build, sync, install, and release helpers
+docs/                Architecture, development, and release documentation
+```
+
+## Next steps
+
+- [Architecture](architecture.md)
+- [webOS development](development/webos.md)
+- [Android TV development](development/android-tv.md)
+- [Debugging](development/debugging.md)
+- [Contributing](../CONTRIBUTING.md)

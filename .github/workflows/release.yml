@@ -17,6 +17,8 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-latest
+    env:
+      HAS_ANDROID_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -54,7 +56,33 @@ jobs:
           npm run test:webos
       - name: Build webOS
         run: npm run build:webos
-      - name: Build Android TV debug artifact
+      - name: Configure Android release signing
+        if: env.HAS_ANDROID_SIGNING == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keystore="$RUNNER_TEMP/ovela-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore"
+          {
+            echo "storeFile=$keystore"
+            echo "storePassword=$ANDROID_STORE_PASSWORD"
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "keyPassword=$ANDROID_KEY_PASSWORD"
+          } > apps/android-tv/keystore.properties
+      - name: Build signed Android TV release
+        if: env.HAS_ANDROID_SIGNING == 'true'
+        working-directory: apps/android-tv
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ../../dist/ci
+          ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleRelease 2>&1 | tee ../../dist/ci/android-release-build.log
+      - name: Build Android TV debug fallback
+        if: env.HAS_ANDROID_SIGNING != 'true'
         working-directory: apps/android-tv
         shell: bash
         run: |
@@ -65,13 +93,17 @@ jobs:
         run: |
           mkdir -p dist/release
           cp dist/webos/*.ipk dist/release/
-          cp apps/android-tv/app/build/outputs/apk/debug/app-debug.apk dist/release/XtreamlyTV-AndroidTV-debug.apk
+          if [ -f apps/android-tv/app/build/outputs/apk/release/app-release.apk ]; then
+            cp apps/android-tv/app/build/outputs/apk/release/app-release.apk dist/release/Ovela-AndroidTV.apk
+          else
+            cp apps/android-tv/app/build/outputs/apk/debug/app-debug.apk dist/release/Ovela-AndroidTV-debug.apk
+          fi
           cd dist/release
           sha256sum * > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: xtreamlytv-release-build-log
+          name: ovela-release-build-log
           path: dist/ci/android-release-build.log
           if-no-files-found: ignore
       - name: Select versioned release notes
@@ -79,8 +111,13 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           notes="docs/release-notes/${version}.md"
-          test -f "$notes"
-          echo "RELEASE_NOTES=$notes" >> "$GITHUB_ENV"
+          if [ -f "$notes" ]; then
+            echo "RELEASE_NOTES=$notes" >> "$GITHUB_ENV"
+          else
+            mkdir -p dist/ci
+            node scripts/release-notes.mjs > dist/ci/release-notes.md
+            echo "RELEASE_NOTES=dist/ci/release-notes.md" >> "$GITHUB_ENV"
+          fi
       - uses: softprops/action-gh-release@v2
         with:
           draft: true

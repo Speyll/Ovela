@@ -1,90 +1,150 @@
 # Architecture
 
-## Why a monorepo
+Ovela is a small monorepo with two native application shells and a shared layer
+of provider, persistence, and design primitives. Playback and UI rendering stay
+platform-native; only code that is genuinely platform-neutral is shared.
 
-XtreamlyTV targets television platforms with very different runtime and playback capabilities. A single repository keeps product behavior, data contracts, brand assets, tests, documentation, and release automation synchronized while allowing each platform to use its native media stack.
+## Layers
 
-## Shared layers
-
-### `packages/contracts`
-
-JSON schemas and fixtures define normalized credentials, categories, content identities, and provider-response expectations. They are the cross-platform compatibility contract.
-
-### `packages/design-tokens`
-
-A single JSON source generates:
-
-- webOS CSS variables
-- Android Compose color constants
-
-This keeps branding and spacing changes deliberate and reviewable.
+```text
+packages/contracts          JSON schemas and fixtures for provider data
+packages/design-tokens      Shared colors, spacing, typography, motion
+packages/core-web           Browser/webOS domain code (ES5)
+        |
+        +--> apps/webos/app/js/core.js, api.js, store.js   (generated copies)
+        |
+apps/webos                  Static HTML/CSS/JS application
+apps/android-tv             Kotlin + Jetpack Compose application
+apps/api-bridge             Optional Node.js LAN bridge for CORS-limited providers
+```
 
 ### `packages/core-web`
 
-The canonical JavaScript implementation contains:
+Canonical source for shared web behavior. `scripts/sync-web-core.mjs` copies
+`api.js`, `core.js`, and `store.js` into `apps/webos/app/js/` with a generated
+header. Edit the package, then run `npm run sync:core` (or
+`npm run prepare:apps`).
 
-- Xtream response normalization
-- M3U/M3U+ parsing, categories, and alternate-host URL rewriting
-- content-type inference
-- stable item IDs
-- stream URL construction
-- bounded playback-recovery decisions
-- web-compatible provider clients
-- webOS local persistence behavior
+- `api.js` — Xtream and M3U request construction, redirect and failover helpers.
+- `core.js` — normalization of provider responses, category rules, item keys.
+- `store.js` — persisted settings, favorites, history, progress, and artwork
+  cache-refresh logic.
 
-The webOS packaging tree receives generated copies through `npm run sync:core`.
+The webOS runtime targets older TV browsers, so these files use ES5 syntax and
+avoid framework runtimes.
 
-### Platform-native layers
+### `apps/webos`
 
-#### webOS
+A packaged static application.
 
-The webOS target is dependency-light HTML, CSS, and JavaScript. It uses category-on-demand loading, a virtualized DOM grid, and an untransformed top-level HTML video surface to cooperate with LG's hardware media plane.
+| File | Responsibility |
+|---|---|
+| `appinfo.json` | Package identity and version (`io.github.speyll.ovela`) |
+| `index.html` | Shell markup and stylesheet/script order |
+| `js/app.js` | Screens, rendering, input routing, playback |
+| `js/navigation.js` | Spatial focus and remote navigation |
+| `js/virtual-grid.js` | Windowed rendering for very large catalogs |
+| `js/v0.7-ui.js` | Production browsing shell and category rail |
+| `js/category-rail.js` | Category wheel/rail behavior |
+| `js/startup.js` | Branded boot splash and theme bootstrap |
+| `js/artwork.js` | Artwork resolution and fallbacks |
+| `js/mock-data.js` | Demo catalog used by tests and the browser demo |
 
-#### Android TV
+State is stored in `localStorage` under `io.github.speyll.ovela.state.v1`.
+The splash is CSS-driven and dismissed once the app shell renders meaningful
+content, with a bounded safety timeout.
 
-The Android target is written in Kotlin with Jetpack Compose and AndroidX Media3 ExoPlayer. It uses encrypted preferences for provider credentials and native Android TV launcher metadata.
+The optional API bridge is used only when a provider blocks browser-origin
+requests. Streams continue to load directly from the provider.
 
-The Android implementation currently mirrors the shared data contracts rather than executing the JavaScript core. This is intentional: native networking and Media3 playback provide better diagnostics and device integration. Contract fixtures and behavior tests are the compatibility boundary.
+### `apps/android-tv`
 
-## Data flow
+A native Kotlin application using Jetpack Compose and AndroidX Media3.
+
+| Package | Responsibility |
+|---|---|
+| `model` | Immutable UI/data models (`CatalogItem`, `AppSettings`, …) |
+| `data` | Xtream/M3U clients, URL building, encrypted credentials, local state, media cache, playback policy |
+| `ui` | Compose screens, `AppViewModel`, focus helpers, theme |
+| `MainActivity` | Activity, splash handoff, composition root |
+
+Key properties:
+
+- `AppViewModel` owns a single `AppUiState` stream; screens render from it.
+- Provider credentials are stored with `EncryptedSharedPreferences`.
+- Favorites, history, progress, settings, and the metadata cache are partitioned
+  by provider account.
+- Media3 ExoPlayer handles playback, with HLS support and explicit failover.
+- Release builds are minified with R8 and signed from an external keystore.
+
+The Android views deliberately reimplement the product behavior natively rather
+than embedding the webOS UI.
+
+### `apps/api-bridge`
+
+A small Node.js service for webOS users whose provider does not send CORS
+headers. It accepts only configured provider servers, playlist URLs, origins, and
+a shared token. It is not a general-purpose proxy and should stay on a trusted
+LAN.
+
+## Provider data flow
 
 ```text
-Source selection
-        ├── Xtream: player_api.php authentication
-        └── M3U/M3U+: fetch and index the playlist
-        │
-        ▼
-Category indexes only
-        │
-        ▼
-Selected category request
-        │
-        ▼
-Normalized catalog items
-        │
-        ├──► Favorites / recent / progress
-        │
-        ▼
-Platform player adapter
-        ├── webOS HTML media surface
-        └── Android Media3 ExoPlayer
+User credentials
+      |
+      v
+Provider client (webOS JS or Android Kotlin)
+      |
+      +--> category list
+      +--> category-scoped item list
+      +--> EPG / detail metadata
+      |
+      v
+Normalized models -> UI state -> screens
+      |
+      v
+Playback URL candidates -> platform media engine
 ```
 
-## Source and recovery model
+Rules shared by both platforms:
 
-Each platform exposes an Xtream client and an M3U client behind the same catalog interface. M3U entries carry a direct stream URL; user-configured alternate hosts are used only to rewrite the origin, preserving paths, query tokens, and media format. No host discovery is performed.
+- Provider responses are untrusted and may be arrays, keyed objects, or
+  malformed.
+- Catalog requests are category-scoped. Ovela does not download an entire
+  provider catalog unless the API offers no alternative.
+- Alternate hosts rewrite only scheme, host, and port; path and query tokens are
+  preserved.
+- Playback tries the next candidate before retrying the same one and uses a
+  finite retry budget.
+- Credentials and authenticated stream URLs never appear in logs or public issue
+  reports.
 
-Playback failures are classified as transient or permanent and handled with a bounded policy: try another URL candidate before repeating, retry transient failures with a delay cap, and stop with an honest message when the candidate/retry budget is exhausted. A stream that never starts or stops advancing is treated as a stall rather than a permanent codec failure.
+## Storage and upgrade compatibility
 
-## Large-catalog rules
+Stored data is intentionally stable across the XtreamlyTV-to-Ovela rename.
 
-- No synthetic “All Channels,” “All Movies,” or “All Series” option.
-- Only one selected category is requested at a time.
-- webOS renders only visible cards plus a small overscan window.
-- Category rails are bounded and recycled.
-- Search operates on the loaded category, not the provider's full catalog.
-- Passwords and authenticated playback URLs must not be written to logs.
+| Platform | Data | Key |
+|---|---|---|
+| webOS | App state | `io.github.speyll.ovela.state.v1` |
+| Android | Encrypted credentials | `xtreamlytv.credentials` |
+| Android | Local state | `xtreamlytv.state.v1` |
+| Android | Metadata cache | `xtreamlytv.media-cache.v1` |
 
-## Versioning
+The Android preference names retain their historical spelling on purpose.
+Renaming them would orphan existing installations' credentials, favorites,
+progress, and settings. Comments at each declaration document this constraint;
+treat the strings as frozen.
 
-The root `VERSION`, webOS `appinfo.json`, Android `versionName`, and Android `versionCode` must be updated together for a release. Release scripts and CI validate these values.
+## Testing strategy
+
+| Layer | Location | Tool |
+|---|---|---|
+| Shared web domain | `packages/core-web/test` | `node --test` |
+| webOS UI and playback | `apps/webos/tests` | Playwright smoke tests |
+| Bridge behavior | `apps/api-bridge/test` | `node --test` |
+| Android data/policy | `apps/android-tv/app/src/test` | JUnit |
+| Build/version consistency | `scripts` | Node checks |
+
+Playwright tests exercise the packaged webOS UI in Chromium, including a
+synthetic 55,000-item catalog. They are a regression net, not a substitute for
+physical-TV validation of codecs, focus, and media surfaces.

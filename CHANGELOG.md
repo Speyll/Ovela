@@ -1,5 +1,53 @@
 # Changelog
 
+## 1.0.0 - 2026-10-26
+
+### Ovela 1.0
+
+- Renamed the project and all application code from XtreamlyTV to Ovela.
+- Relicensed the project under the Apache License 2.0, with the original MIT
+  attribution preserved in `NOTICE` and `THIRD_PARTY_NOTICES.md`.
+- Restored the SIL Open Font License texts for the bundled Inter and Arimo fonts
+  and included them in both application packages.
+- Added signed Android release builds driven by an external keystore or
+  `OVELA_KEYSTORE_*` environment variables.
+- Rewrote the README, contributor, security, privacy, architecture, getting
+  started, and release documentation.
+- Moved releases to `Speyll/Ovela` with `main` as the default branch.
+
+### Compatibility
+
+- Preserved the existing webOS state key and the three Android preference stores
+  so an in-place update keeps credentials, favorites, history, progress, and
+  settings. The Android preference names intentionally retain their historical
+  spelling.
+- No application ID change and no data migration required.
+
+### Performance
+
+- webOS: `refreshArtwork` now indexes only saved favourites and recents and
+  returns immediately when nothing matches. Measured on a 55,000-item category:
+  6.9 ms to 0.02 ms with no saved items, and 7.4 ms to 3.2 ms with saved items.
+- Android: `ensureEpg` batches loading state into a single emission instead of up
+  to eight recompositions.
+- Android: marked `AppSettings`, `Credentials`, `FavoriteGroup`, and
+  `PlayerRequest` as `@Immutable` after the Compose stability report flagged
+  them, allowing screens with unchanged data to skip recomposition.
+
+### Android fixes and polish
+
+- Routed provider-edit Back through explicit `editingProvider` state.
+- Trapped Up/Down in the search overlay and restored `searchNavFocus` on exit.
+- Fell back to `activeNavFocus` when an entry point has no focus target.
+- Fixed favourites-manager entry focus and nested Back handling.
+- Focused the group-editor name field and the first card of an empty group.
+- Routed category-visibility confirmation through Back.
+- Corrected singular item counts.
+
+Android changes in this release are covered by JVM unit tests and a successful
+compile; physical-device validation of the new focus and Back paths is still
+required.
+
 ## 0.7.0 - 2026-10-13
 
 ### Final fixes and Android improvements
@@ -53,7 +101,7 @@
 
 ### Release-candidate display polish
 
-- Replaced in-app raster logo tiles with a transparent vector XtreamlyTV wordmark while preserving launcher icons and TV banners.
+- Replaced in-app raster logo tiles with a transparent vector Ovela wordmark while preserving launcher icons and TV banners.
 - Stabilized Android catalog category borders and made category-to-card D-pad transitions deterministic.
 - Added full-card row alignment so catalog, Favorites, and Series episode grids never leave the focused card clipped.
 - Rebalanced Series Details so hero actions and season controls remain fully visible on common Android TV logical resolutions.

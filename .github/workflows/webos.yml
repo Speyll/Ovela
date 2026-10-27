@@ -50,5 +50,5 @@ jobs:
         run: npm run build:webos
       - uses: actions/upload-artifact@v7
         with:
-          name: xtreamlytv-webos
+          name: ovela-webos
           path: dist/webos/*.ipk

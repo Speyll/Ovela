@@ -16,6 +16,12 @@ The Android target follows the polished webOS application as the shared product 
 - Android Studio is optional; command-line builds use the committed Gradle wrapper.
 - A TV/emulator running Android 6.0 / API 23 or later
 
+Optional local toolchain: if a JDK and Android SDK are provisioned inside this
+repository's `.dev/` directory, `source .dev/testing/scripts/android-env.sh` from
+the repository root selects `.dev/tooling/jdk` and `.dev/android-sdk` and keeps
+Gradle caches in `.dev/gradle-home`. `OVELA_JAVA_HOME` and
+`OVELA_ANDROID_SDK` override those locations.
+
 Open `apps/android-tv` as an Android Studio project, or build from the command line.
 
 ## Build a debug APK
@@ -49,6 +55,26 @@ Output:
 ```text
 apps/android-tv/app/build/outputs/apk/debug/app-debug.apk
 ```
+
+## Build a signed release APK
+
+Release builds read signing material from `apps/android-tv/keystore.properties`
+(gitignored) or `OVELA_KEYSTORE_*` environment variables. With a configuration in
+place:
+
+```bash
+cd apps/android-tv
+./gradlew :app:assembleRelease
+```
+
+Output:
+
+```text
+apps/android-tv/app/build/outputs/apk/release/app-release.apk
+```
+
+See [Releasing](../releasing.md#android-signing) for keystore creation and
+signature verification. Never commit a keystore or its passwords.
 
 ## Create an emulator
 
@@ -111,13 +137,13 @@ The `-r` flag updates the existing package while preserving app data.
 Launch from the TV launcher, or run:
 
 ```bash
-adb shell monkey -p com.github.xtreamlytv.androidtv 1
+adb shell monkey -p io.github.speyll.ovela 1
 ```
 
 Uninstall and clear all data:
 
 ```bash
-adb uninstall com.github.xtreamlytv.androidtv
+adb uninstall io.github.speyll.ovela
 ```
 
 PowerShell helper:
@@ -129,20 +155,20 @@ PowerShell helper:
 ## Logs
 
 ```bash
-adb logcat --pid=$(adb shell pidof -s com.github.xtreamlytv.androidtv)
+adb logcat --pid=$(adb shell pidof -s io.github.speyll.ovela)
 ```
 
 Windows PowerShell:
 
 ```powershell
-$pidOnTv = adb shell pidof -s com.github.xtreamlytv.androidtv
+$pidOnTv = adb shell pidof -s io.github.speyll.ovela
 adb logcat --pid=$pidOnTv
 ```
 
 Filter Media3 messages:
 
 ```bash
-adb logcat | grep -E "XtreamlyTV|ExoPlayer|MediaCodec"
+adb logcat | grep -E "Ovela|ExoPlayer|MediaCodec"
 ```
 
 Do not publish logs containing provider passwords or authenticated stream URLs.
@@ -159,7 +185,7 @@ Many Xtream providers use HTTP rather than HTTPS. The application permits cleart
 
 ## TV launcher artwork and UI resolution
 
-XtreamlyTV does not override the TV's display size or density. Android TV chooses the logical UI surface and the resource system selects the closest matching artwork.
+Ovela does not override the TV's display size or density. Android TV chooses the logical UI surface and the resource system selects the closest matching artwork.
 
 The Android target includes:
 
