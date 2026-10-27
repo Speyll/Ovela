@@ -48,15 +48,15 @@ def main() -> None:
         page = browser.new_page(viewport={"width": 1920, "height": 1080})
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.set_content(inline_app(), wait_until="domcontentloaded")
-        page.evaluate("XtreamlyTVApp.startDemo()")
+        page.evaluate("OvelaApp.startDemo()")
         page.evaluate("""() => {
-            XtreamlyTVStore.clearHistory();
-            XtreamlyTVMock.liveStreams.slice(0, 4).forEach(item => XtreamlyTVStore.addRecent(item, 'live'));
-            XtreamlyTVMock.vodStreams.slice(0, 4).forEach(item => XtreamlyTVStore.addRecent(item, 'movie'));
-            XtreamlyTVMock.series.slice(0, 4).forEach(item => XtreamlyTVStore.addRecent(item, 'series'));
-            XtreamlyTVApp.state = XtreamlyTVStore.getState();
-            XtreamlyTVApp.currentView = 'home';
-            XtreamlyTVApp.renderView();
+            OvelaStore.clearHistory();
+            OvelaMock.liveStreams.slice(0, 4).forEach(item => OvelaStore.addRecent(item, 'live'));
+            OvelaMock.vodStreams.slice(0, 4).forEach(item => OvelaStore.addRecent(item, 'movie'));
+            OvelaMock.series.slice(0, 4).forEach(item => OvelaStore.addRecent(item, 'series'));
+            OvelaApp.state = OvelaStore.getState();
+            OvelaApp.currentView = 'home';
+            OvelaApp.renderView();
         }""")
         page.wait_for_selector(".hero")
 

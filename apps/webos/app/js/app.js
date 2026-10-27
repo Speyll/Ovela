@@ -2,9 +2,9 @@
   'use strict';
 
   var BACK = 461, PLAY = 415, PAUSE = 19, STOP = 413, RED = 403, GREEN = 404;
-  var APP_NAME = 'XtreamlyTV';
-  var APP_ID = 'com.github.xtreamlytv.webos';
-  var APP_VERSION = '0.7.0';
+  var APP_NAME = 'Ovela';
+  var APP_ID = 'io.github.speyll.ovela';
+  var APP_VERSION = '1.0.0';
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>'"]/g, function (char) {
@@ -66,11 +66,11 @@
   }
 
   function typeOf(item) {
-    return XtreamlyTVStore.inferType(item);
+    return OvelaStore.inferType(item);
   }
 
   function idOf(item, type) {
-    return XtreamlyTVStore.itemId(item, type);
+    return OvelaStore.itemId(item, type);
   }
 
   function titleOf(item) {
@@ -102,6 +102,15 @@
     return item.stream_icon || item.movie_image || item.cover_big || item.cover || '';
   }
 
+  function sizedImageUrl(value, size) {
+    var url = String(value || '').trim();
+    if (!url || !/image\.tmdb\.org/i.test(url)) return url;
+    return url.replace(
+      /\/t\/p\/(?:w\d+(?:_and_h\d+_[^/]+)?|original)\//i,
+      '/t/p/' + size + '/'
+    );
+  }
+
   function logo(item, className) {
     className = className || 'channel-logo';
     var image = imageOf(item, 'live');
@@ -114,7 +123,7 @@
 
   function poster(item, type, className) {
     className = className || 'poster-art';
-    var image = imageOf(item, type);
+    var image = sizedImageUrl(imageOf(item, type), className.indexOf('backdrop') >= 0 ? 'w1280' : 'w500');
     return '<div class="' + className + (image ? '' : ' image-failed') + '">' +
       (image ? '<img src="' + escapeHtml(image) + '" alt="" loading="lazy" decoding="async" onerror="this.style.display=\'none\';this.parentNode.classList.add(\'image-failed\')">' : '') +
       '<div class="poster-fallback"><span>' + escapeHtml(initials(titleOf(item))) + '</span></div></div>';
@@ -166,10 +175,11 @@
   }
 
   var App = {
+    uiIcon: uiIcon,
     root: document.getElementById('app'),
     playerHost: document.getElementById('playerHost'),
     toastEl: document.getElementById('toast'),
-    state: XtreamlyTVStore.getState(),
+    state: OvelaStore.getState(),
     profile: null,
     liveCategories: [],
     vodCategories: [],
@@ -203,6 +213,8 @@
     playbackCandidateIndex: 0,
     playbackCandidateRetries: {},
     playbackRetryTimer: null,
+    playbackStartTimer: null,
+    playbackLoadId: 0,
     playbackWatchdog: null,
     playbackBufferTimer: null,
     playbackStartedAt: 0,
@@ -211,6 +223,8 @@
     playbackProgressRestored: false,
     playbackSwitching: false,
     playbackFailureLock: false,
+    playerErrorOpen: false,
+    playerErrorRetryAvailable: false,
     overlayTimer: null,
     playerHasPlayed: false,
     lastPlaybackToggleAt: 0,
@@ -227,7 +241,7 @@
     pendingNavigationRestore: null,
     playerReturnState: null,
     navigationRememberTimer: null,
-    navigationStorageKey: 'xtreamlytv.navigation.v1',
+    navigationStorageKey: 'io.github.speyll.ovela.navigation.v1',
     pendingCatalogFirstFocus: { live:false, movies:false, series:false },
     pendingFavoriteFirstFocus: false,
 
@@ -235,7 +249,7 @@
       this.applyTheme(this.state.settings.theme || 'blue');
       this.navigationStates = this.loadNavigationStates();
       this.scale();
-      window.addEventListener('xtreamlytv-storage-error', function () { App.toast('Unable to save changes. Free device storage and try again.'); });
+      window.addEventListener('io.github.speyll.ovela-storage-error', function () { App.toast('Unable to save changes. Free device storage and try again.'); });
       window.addEventListener('resize', this.scale.bind(this));
       document.addEventListener('keydown', this.onGlobalKey.bind(this));
       document.addEventListener('focusin', this.updateMenuHint.bind(this));
@@ -262,10 +276,10 @@
       var allowed = ['teal', 'gray', 'purple', 'pink', 'blue'];
       if (allowed.indexOf(theme) < 0) theme = 'blue';
       document.body.setAttribute('data-theme', theme);
-      if (window.XtreamlyTVBrand && window.XtreamlyTVBrand.apply) window.XtreamlyTVBrand.apply(theme);
+      if (window.OvelaBrand && window.OvelaBrand.apply) window.OvelaBrand.apply(theme);
       if (persist) {
-        XtreamlyTVStore.updateSettings({ theme: theme });
-        this.state = XtreamlyTVStore.getState();
+        OvelaStore.updateSettings({ theme: theme });
+        this.state = OvelaStore.getState();
       }
     },
 
@@ -326,7 +340,7 @@
 
     captureNavigationState: function () {
       var scrollables = Array.prototype.slice.call(document.querySelectorAll(
-        '.scroll-view,.virtual-grid-host,.favorite-groups-row,.category-list,.favorite-manager-list,.favorite-item-manager-list,.favorite-editor-settings'
+        '.scroll-view,.v07-home-scroll,.virtual-grid-host,.favorite-groups-row,.category-list,.favorite-manager-list,.favorite-item-manager-list,.favorite-editor-settings'
       ));
       return {
         view:this.currentView,
@@ -370,7 +384,7 @@
     restoreNavigationScrolls: function (snapshot) {
       if (!snapshot || !Array.isArray(snapshot.scrolls)) return;
       var scrollables = Array.prototype.slice.call(document.querySelectorAll(
-        '.scroll-view,.virtual-grid-host,.favorite-groups-row,.category-list,.favorite-manager-list,.favorite-item-manager-list,.favorite-editor-settings'
+        '.scroll-view,.v07-home-scroll,.virtual-grid-host,.favorite-groups-row,.category-list,.favorite-manager-list,.favorite-item-manager-list,.favorite-editor-settings'
       ));
       snapshot.scrolls.forEach(function (saved) {
         var element = saved.id ? document.getElementById(saved.id) : scrollables[saved.index];
@@ -448,9 +462,8 @@
       var xtreamHidden = sourceType === 'm3u' ? ' hidden' : '';
       var m3uHidden = sourceType === 'm3u' ? '' : ' hidden';
       this.root.innerHTML = '<section class="screen login-screen">' +
-        '<div class="login-brand"><div class="brand-lockup"><img class="brand-wordmark" src="assets/xtreamlytv-wordmark.svg" alt="XtreamlyTV"><span>Live · Movies · Series</span></div>' +
-        '<p>A fast, remote-first IPTV player designed for large provider libraries and LG webOS televisions.</p>' +
-        '<div class="feature-pills"><span class="feature-pill">Xtream + M3U</span><span class="feature-pill">Virtualized catalogs</span><span class="feature-pill">Stream recovery</span><span class="feature-pill">Resume playback</span><span class="feature-pill">No tracking</span></div></div>' +
+        '<div class="login-brand"><div class="brand-lockup"><div class="ovela-lockup"><span class="ovela-mark" aria-hidden="true"></span><img class="ovela-word" src="assets/ovela-wordmark.png" alt="Ovela" aria-hidden="true"></div></div>' +
+        '<p>Connect your provider to browse Live TV, Movies and Series.</p></div>' +
         '<form id="loginForm" class="login-card">' +
         '<h2>Connect your provider</h2><div class="sub">Use an Xtream account or load an M3U playlist URL.</div>' +
         (error ? '<div class="form-error">' + escapeHtml(error) + '</div>' : '') +
@@ -464,7 +477,7 @@
         '<div class="field-row"><label class="field"><span>Live stream format</span><select class="focusable" name="streamFormat"><option value="auto"' + (settings.streamFormat === 'auto' || !settings.streamFormat ? ' selected' : '') + '>Automatic fallback</option><option value="m3u8"' + (settings.streamFormat === 'm3u8' ? ' selected' : '') + '>HLS (.m3u8)</option><option value="ts"' + (settings.streamFormat === 'ts' ? ' selected' : '') + '>MPEG-TS (.ts)</option></select></label>' +
         '<label class="field"><span>API bridge (optional)</span><input class="focusable" name="apiProxy" value="' + escapeHtml(settings.apiProxy || '') + '" placeholder="http://unraid.local:8787"></label></div>' +
         '<div class="button-row"><button id="loginConnect" class="primary-button focusable" type="submit">Connect</button><button class="secondary-button focusable" type="button" id="demoButton">Explore demo</button></div>' +
-        '<div class="login-note">XtreamlyTV provides no channels or subscriptions. Use only services and content you are authorized to access. Credentials are stored locally on this TV.</div>' +
+        '<div class="login-note">Ovela provides no channels or subscriptions. Use only services and content you are authorized to access. Credentials are stored locally on this TV.</div>' +
         '</form></section>';
 
       var self = this;
@@ -475,7 +488,7 @@
         var m3uFields = document.getElementById('m3uFields');
         if (xtreamFields) xtreamFields.hidden = m3u;
         if (m3uFields) m3uFields.hidden = !m3u;
-        XtreamlyTVNavigation.invalidate();
+        OvelaNavigation.invalidate();
       }
       if (sourceSelect) sourceSelect.addEventListener('change', refreshSourceFields);
       document.getElementById('loginForm').addEventListener('submit', function (event) {
@@ -503,7 +516,7 @@
           if (next) { next.focus(); if (next.select) next.select(); }
         });
       });
-      XtreamlyTVNavigation.focusFirst('#loginConnect');
+      OvelaNavigation.focusFirst('#loginConnect');
     },
 
     renderLoading: function (message) {
@@ -566,21 +579,21 @@
         }
         if (!/^https?:\/\//i.test(credentials.server)) credentials.server = 'http://' + credentials.server;
       }
-      XtreamlyTVStore.updateSettings(settings || {});
-      this.state = XtreamlyTVStore.getState();
+      OvelaStore.updateSettings(settings || {});
+      this.state = OvelaStore.getState();
       this.applyTheme(this.state.settings.theme || 'blue');
       this.resetCatalog();
       var session = this.sessionGeneration;
       var candidate = sourceType === 'm3u'
-        ? new XtreamlyTVM3uApi(credentials, this.state.settings)
-        : new XtreamlyTVApi(credentials, this.state.settings);
+        ? new OvelaM3uApi(credentials, this.state.settings)
+        : new OvelaApi(credentials, this.state.settings);
       this.renderLoading(sourceType === 'm3u' ? 'Loading and indexing M3U playlist…' : 'Connecting and loading category indexes…');
       candidate.authenticate().then(function (profile) {
         if (session !== self.sessionGeneration) return null;
         self.api = candidate;
         self.profile = profile;
-        XtreamlyTVStore.saveCredentials(credentials);
-        self.state = XtreamlyTVStore.getState();
+        OvelaStore.saveCredentials(credentials);
+        self.state = OvelaStore.getState();
         return Promise.all([
           settle(candidate.getLiveCategories(), []),
           settle(candidate.getVodCategories(), []),
@@ -604,7 +617,7 @@
         /* A provider outage or authentication failure must never erase the
            user's saved connection details. For manual attempts, re-render the
            submitted values without persisting them until authentication succeeds. */
-        self.state = XtreamlyTVStore.getState();
+        self.state = OvelaStore.getState();
         self.renderLogin(
           error.message || 'Unable to connect.',
           silent ? null : credentials,
@@ -616,28 +629,28 @@
     startDemo: function () {
       var self = this;
       this.resetCatalog();
-      XtreamlyTVStore.selectDemo();
-      this.state = XtreamlyTVStore.getState();
+      OvelaStore.selectDemo();
+      this.state = OvelaStore.getState();
       this.demo = true;
-      this.profile = XtreamlyTVMock.profile;
-      this.liveCategories = XtreamlyTVMock.liveCategories.slice();
-      this.vodCategories = XtreamlyTVMock.vodCategories.slice();
-      this.seriesCategories = XtreamlyTVMock.seriesCategories.slice();
+      this.profile = OvelaMock.profile;
+      this.liveCategories = OvelaMock.liveCategories.slice();
+      this.vodCategories = OvelaMock.vodCategories.slice();
+      this.seriesCategories = OvelaMock.seriesCategories.slice();
       this.api = {
-        getLiveStreams: function (category) { return Promise.resolve(self.filterByCategory(XtreamlyTVMock.liveStreams, category)); },
-        getVodStreams: function (category) { return Promise.resolve(self.filterByCategory(XtreamlyTVMock.vodStreams, category)); },
-        getSeries: function (category) { return Promise.resolve(self.filterByCategory(XtreamlyTVMock.series, category)); },
-        discoverSeries: function () { return Promise.resolve({ categories: self.seriesCategories, items: XtreamlyTVMock.series }); },
+        getLiveStreams: function (category) { return Promise.resolve(self.filterByCategory(OvelaMock.liveStreams, category)); },
+        getVodStreams: function (category) { return Promise.resolve(self.filterByCategory(OvelaMock.vodStreams, category)); },
+        getSeries: function (category) { return Promise.resolve(self.filterByCategory(OvelaMock.series, category)); },
+        discoverSeries: function () { return Promise.resolve({ categories: self.seriesCategories, items: OvelaMock.series }); },
         getShortEpg: function (id) {
-          return Promise.resolve(XtreamlyTVMock.epg(XtreamlyTVMock.liveStreams.find(function (stream) { return String(stream.stream_id) === String(id); }) || { name: 'Demo' }));
+          return Promise.resolve(OvelaMock.epg(OvelaMock.liveStreams.find(function (stream) { return String(stream.stream_id) === String(id); }) || { name: 'Demo' }));
         },
         getVodInfo: function (id) {
-          var item = XtreamlyTVMock.vodStreams.find(function (movie) { return String(movie.stream_id) === String(id); });
-          return Promise.resolve(XtreamlyTVMock.vodInfo(item || { name: 'Demo Movie', stream_id: id }));
+          var item = OvelaMock.vodStreams.find(function (movie) { return String(movie.stream_id) === String(id); });
+          return Promise.resolve(OvelaMock.vodInfo(item || { name: 'Demo Movie', stream_id: id }));
         },
         getSeriesInfo: function (id) {
-          var item = XtreamlyTVMock.series.find(function (series) { return String(series.series_id) === String(id); });
-          return Promise.resolve(XtreamlyTVMock.seriesInfo(item || { name: 'Demo Series', series_id: id }));
+          var item = OvelaMock.series.find(function (series) { return String(series.series_id) === String(id); });
+          return Promise.resolve(OvelaMock.seriesInfo(item || { name: 'Demo Series', series_id: id }));
         },
         getLiveCandidates: function () { return []; },
         getMediaCandidates: function () { return []; }
@@ -645,9 +658,9 @@
       this.activeCategory.live = this.firstCategoryId('live');
       this.activeCategory.movies = this.firstCategoryId('movies');
       this.activeCategory.series = this.firstCategoryId('series');
-      this.storeCache('live', 'all', this.normalizeCatalogItems('live', XtreamlyTVMock.liveStreams));
-      this.storeCache('movies', 'all', this.normalizeCatalogItems('movies', XtreamlyTVMock.vodStreams));
-      this.storeCache('series', 'all', this.normalizeCatalogItems('series', XtreamlyTVMock.series));
+      this.storeCache('live', 'all', this.normalizeCatalogItems('live', OvelaMock.liveStreams));
+      this.storeCache('movies', 'all', this.normalizeCatalogItems('movies', OvelaMock.vodStreams));
+      this.storeCache('series', 'all', this.normalizeCatalogItems('series', OvelaMock.series));
       this.renderShell('home', this.navigationStates.home || null);
     },
 
@@ -688,8 +701,8 @@
     storeCache: function (kind, category, items) {
       category = String(category || 'all');
       this.catalogCache[kind][category] = items;
-      XtreamlyTVStore.refreshArtwork(items, kind === 'movies' ? 'movie' : kind === 'series' ? 'series' : 'live');
-      this.state = XtreamlyTVStore.getState();
+      OvelaStore.refreshArtwork(items, kind === 'movies' ? 'movie' : kind === 'series' ? 'series' : 'live');
+      this.state = OvelaStore.getState();
       this.cacheOrder[kind] = this.cacheOrder[kind].filter(function (key) { return key !== category; });
       this.cacheOrder[kind].push(category);
       var limit = Math.max(1, Number(this.state.settings.maxCachedCategories || 3));
@@ -704,17 +717,45 @@
       });
     },
 
-    loadedItems: function (kind) {
+    forEachLoadedItem: function (kind, visitor) {
       var type = kind === 'live' ? 'live' : (kind === 'movies' ? 'movie' : 'series');
+      var cached = this.catalogCache[kind] || {};
+      var keys = Object.keys(cached);
+      var seen = {};
+      for (var keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+        var items = cached[keys[keyIndex]] || [];
+        for (var itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
+          var item = items[itemIndex];
+          var id = idOf(item, type);
+          if (!id) continue;
+          var lookup = type + ':' + id;
+          if (seen[lookup]) continue;
+          seen[lookup] = true;
+          if (visitor(item) === false) return false;
+        }
+      }
+      return true;
+    },
+
+    loadedItems: function (kind) {
       var combined = [];
-      Object.keys(this.catalogCache[kind]).forEach(function (key) {
-        combined = combined.concat(App.catalogCache[kind][key]);
+      this.forEachLoadedItem(kind, function (item) { combined.push(item); });
+      return combined;
+    },
+
+    firstLoadedItem: function (kind) {
+      var first = null;
+      this.forEachLoadedItem(kind, function (item) {
+        first = item;
+        return false;
       });
-      return uniqueById(combined, type);
+      return first;
     },
 
     loadedCount: function (kind) {
-      return this.loadedItems(kind).length;
+      var count = 0;
+      this.forEachLoadedItem(kind, function () { count += 1; });
+      return count;
     },
 
     providerAllowedFormats: function () {
@@ -833,7 +874,7 @@
         ['favorites', uiIcon('heart', 'nav-svg'), 'Favorites'],
         ['settings', uiIcon('settings', 'nav-svg'), 'Settings']
       ];
-      return '<aside class="sidebar"><div class="logo"><img class="brand-wordmark" src="assets/xtreamlytv-wordmark.svg" alt="XtreamlyTV"></div><nav class="nav-list">' +
+      return '<aside class="sidebar"><div class="logo"><div class="ovela-lockup"><span class="ovela-mark" aria-hidden="true"></span><img class="ovela-word" src="assets/ovela-wordmark.png" alt="Ovela" aria-hidden="true"></div></div><nav class="nav-list">' +
         items.map(function (item) {
           return '<button class="nav-item focusable ' + (App.currentView === item[0] ? 'active' : '') + '" data-view="' + item[0] + '"><span class="nav-icon">' + item[1] + '</span>' + item[2] + '</button>';
         }).join('') + '</nav></aside>';
@@ -876,7 +917,7 @@
         hint.setAttribute('aria-hidden', 'true');
         return;
       }
-      var favorite = XtreamlyTVStore.isFavorite(type, idOf(item, type));
+      var favorite = OvelaStore.isFavorite(type, idOf(item, type));
       var text = document.getElementById('menuHintText');
       if (text) text.textContent = favorite ? 'Remove favorite' : 'Add favorite';
       hint.classList.add('visible');
@@ -912,8 +953,8 @@
     toggleFocusedFavorite: function () {
       var target = this.focusedFavoriteTarget();
       if (!target) return false;
-      var added = XtreamlyTVStore.toggleFavorite(target.item, target.type);
-      this.state = XtreamlyTVStore.getState();
+      var added = OvelaStore.toggleFavorite(target.item, target.type);
+      this.state = OvelaStore.getState();
       if (this.currentView === 'favorites') {
         this.renderFavorites();
       } else {
@@ -939,7 +980,7 @@
     viewTitle: function () {
       if (this.detail && this.detail.type === 'movie') return 'Movie Details';
       if (this.detail && this.detail.type === 'series') return 'Series Details';
-      return ({ home: 'Home', live: 'Live TV', movies: 'Movies', series: 'Series', favorites: 'Favorites', settings: 'Settings' })[this.currentView] || 'XtreamlyTV';
+      return ({ home: 'Home', live: 'Live TV', movies: 'Movies', series: 'Series', favorites: 'Favorites', settings: 'Settings' })[this.currentView] || 'Ovela';
     },
 
     renderView: function () {
@@ -962,7 +1003,7 @@
       var seriesPreview = uniqueById(recent.map(function (item) {
         return typeOf(item) === 'episode' && item.parent_series ? item.parent_series : item;
       }).filter(function (item) { return typeOf(item) === 'series'; }), 'series').slice(0, 7);
-      var featured = recent[0] || this.loadedItems('live')[0];
+      var featured = recent[0] || this.firstLoadedItem('live');
       var featuredType = featured ? typeOf(featured) : 'live';
       view.innerHTML = '<div class="scroll-view">' +
         '<div class="hero"><div class="hero-art"></div><div class="hero-lines"></div><div class="hero-content"><h2>' +
@@ -982,7 +1023,7 @@
       this.bindShortcutCards();
       this.bindContentCards();
       this.annotateHomeNavigation();
-      XtreamlyTVNavigation.focusFirst('.hero .focusable');
+      OvelaNavigation.focusFirst('.hero .focusable');
     },
 
 
@@ -994,17 +1035,28 @@
           element.dataset.homeColumn = String(columnIndex);
         });
       }
-      mark(document.querySelectorAll('.hero .focusable'), row);
-      row += 1;
-      mark(document.querySelectorAll('.shortcut-row .focusable'), row);
-      row += 1;
-      Array.prototype.forEach.call(document.querySelectorAll('.mixed-row, .channel-row, .poster-row'), function (container) {
+      /* Rows must follow the rendered DOM order, not the order of a fixed
+         selector list: the redesigned Home places the Browse shortcuts between
+         content rails, and the legacy Home places them directly under the hero.
+         Walking the containers in document order keeps D-pad Up/Down aligned
+         with what the viewer actually sees. */
+      var containers = document.querySelectorAll(
+        '#view .hero, #view .shortcut-row, #view .mixed-row, #view .channel-row, #view .poster-row'
+      );
+      Array.prototype.forEach.call(containers, function (container) {
         var controls = container.querySelectorAll('.focusable');
-        if (!controls.length) return;
-        mark(controls, row);
+        var marked = [];
+        Array.prototype.forEach.call(controls, function (control) {
+          /* A row may be nested inside another matched container. Mark it only
+             once, using its outer-most container, so indices stay stable. */
+          if (control.dataset.homeRow !== undefined) return;
+          marked.push(control);
+        });
+        if (!marked.length) return;
+        mark(marked, row);
         row += 1;
       });
-      if (window.XtreamlyTVNavigation && window.XtreamlyTVNavigation.invalidate) window.XtreamlyTVNavigation.invalidate();
+      if (window.OvelaNavigation && window.OvelaNavigation.invalidate) window.OvelaNavigation.invalidate();
     },
 
     libraryShortcutsHtml: function () {
@@ -1040,11 +1092,11 @@
     },
 
     posterSection: function (heading, items, type) {
-      return '<section class="section"><div class="section-head"><h2>' + escapeHtml(heading) + '</h2><span class="section-meta">' + items.length + ' titles</span></div><div class="poster-row">' + items.map(function (item) { return App.posterCardHtml(item, type); }).join('') + '</div></section>';
+      return '<section class="section"><div class="section-head"><h2>' + escapeHtml(heading) + '</h2><span class="section-meta">' + items.length + (items.length === 1 ? ' title' : ' titles') + '</span></div><div class="poster-row">' + items.map(function (item) { return App.posterCardHtml(item, type); }).join('') + '</div></section>';
     },
 
     channelCardHtml: function (channel) {
-      var favorite = XtreamlyTVStore.isFavorite('live', channel.stream_id);
+      var favorite = OvelaStore.isFavorite('live', channel.stream_id);
       return '<button class="channel-card focusable" data-content-type="live" data-content-id="' + escapeHtml(channel.stream_id) + '">' +
         (favorite ? '<span class="favorite-badge">♥</span>' : '') + '<div class="channel-top">' + logo(channel) + '<div><div class="channel-name">' + escapeHtml(channel.name) + '</div><div class="channel-number">CH ' + escapeHtml(channel.num || '—') + '</div></div></div>' +
         '<div class="now-line">Live programming</div><div class="progress"><i style="width:' + (20 + (Number(channel.stream_id) % 60)) + '%"></i></div></button>';
@@ -1052,8 +1104,8 @@
 
     posterCardHtml: function (item, type) {
       var id = idOf(item, type);
-      var favorite = XtreamlyTVStore.isFavorite(type, id);
-      var progress = type === 'movie' || type === 'episode' ? XtreamlyTVStore.getProgress(type, id) : null;
+      var favorite = OvelaStore.isFavorite(type, id);
+      var progress = type === 'movie' || type === 'episode' ? OvelaStore.getProgress(type, id) : null;
       var percent = progress && progress.duration ? Math.min(100, progress.seconds / progress.duration * 100) : 0;
       return '<button class="poster-card focusable" data-content-type="' + type + '" data-content-id="' + escapeHtml(id) + '">' +
         (favorite ? '<span class="favorite-badge poster-favorite">♥</span>' : '') + poster(item, type) +
@@ -1064,7 +1116,7 @@
 
     channelTileHtml: function (channel) {
       return '<button class="channel-tile focusable" data-content-type="live" data-content-id="' + escapeHtml(channel.stream_id) + '"><div class="channel-top">' + logo(channel) +
-        '<div class="channel-tile-copy"><div class="channel-name">' + escapeHtml(channel.name) + '</div><div class="channel-number">' + (XtreamlyTVStore.isFavorite('live', channel.stream_id) ? '♥ Favorite' : 'CH ' + escapeHtml(channel.num || '—')) + '</div></div></div></button>';
+        '<div class="channel-tile-copy"><div class="channel-name">' + escapeHtml(channel.name) + '</div><div class="channel-number">' + (OvelaStore.isFavorite('live', channel.stream_id) ? '♥ Favorite' : 'CH ' + escapeHtml(channel.num || '—')) + '</div></div></div></button>';
     },
 
     bindContentCards: function () {
@@ -1116,17 +1168,30 @@
       var container = document.getElementById('categoryList');
       if (!container) return;
       this.destroyCategoryRail();
-      this.categoryRail = new XtreamlyTVCategoryRail({
+      this.categoryRail = new OvelaCategoryRail({
         container:container,
         items:this.categoryRailItems(kind, categories),
         activeId:active,
         maxVisible:13,
         onActivate:function (item) {
           var category = String(item.id);
+          var sameCategory = String(self.activeCategory[kind] || '') === category;
+          var hadSearch = !!String(self.searchText[kind] || '').trim();
           self.activeCategory[kind] = category;
           self.searchText[kind] = '';
-          self.pendingCatalogFirstFocus[kind] = true;
           self.pendingNavigationRestore = null;
+
+          /* Right/OK on the already-selected category is a request to enter
+             the content pane, not a request to re-render the same screen.
+             Reuse the existing grid so focus lands on its first item without a
+             destructive rail rebuild. A pending search changes the result set,
+             so that path still needs a full catalog refresh. */
+          if (sameCategory && !hadSearch && self.virtualGrid && self.virtualGrid.items && self.virtualGrid.items.length) {
+            self.virtualGrid.focusIndex(Math.max(0, Number(self.virtualGrid.activeIndex || 0)));
+            return;
+          }
+
+          self.pendingCatalogFirstFocus[kind] = true;
           self.renderCatalog(kind);
         }
       });
@@ -1196,7 +1261,7 @@
         delete self.catalogCache[kind][String(self.activeCategory[kind])];
         self.loadCategory(kind, self.activeCategory[kind]).catch(function () {});
       });
-      XtreamlyTVNavigation.focusFirst('#retryCatalog');
+      OvelaNavigation.focusFirst('#retryCatalog');
     },
 
     filteredCatalogItems: function (kind) {
@@ -1215,7 +1280,7 @@
       var items = this.filteredCatalogItems(kind);
       this.currentFilteredItems[kind] = items;
       var count = document.querySelector('.result-count');
-      if (count) count.textContent = items.length.toLocaleString() + ' ' + config.plural;
+      if (count) count.textContent = items.length.toLocaleString() + ' ' + (items.length === 1 ? (config.singular || config.plural) : config.plural);
       this.destroyVirtualGrid();
       gridElement.innerHTML = '';
       if (!items.length) {
@@ -1227,7 +1292,7 @@
         return;
       }
       var self = this;
-      this.virtualGrid = new XtreamlyTVVirtualGrid({
+      this.virtualGrid = new OvelaVirtualGrid({
         container: gridElement,
         columns: config.columns,
         visibleRows: config.visibleRows,
@@ -1268,7 +1333,8 @@
 
     openMovieDetail: function (movie) {
       var self = this;
-      var returnView = this.currentView === 'favorites' ? 'favorites' : 'movies';
+      var origin = this.currentView;
+      var returnView = (origin === 'home' || origin === 'live' || origin === 'movies' || origin === 'series' || origin === 'favorites') ? origin : 'movies';
       var returnState = this.captureNavigationState();
       this.rememberNavigationState(returnState);
       this.detail = { type: 'movie', item: movie, info: null, loading: true, error: '', returnView:returnView, returnState:returnState };
@@ -1300,8 +1366,8 @@
         return;
       }
       var id = movie.stream_id;
-      var favorite = XtreamlyTVStore.isFavorite('movie', id);
-      var progress = XtreamlyTVStore.getProgress('movie', id);
+      var favorite = OvelaStore.isFavorite('movie', id);
+      var progress = OvelaStore.getProgress('movie', id);
       view.innerHTML = '<div class="scroll-view detail-scroll"><section class="detail-hero">' +
         '<div class="detail-backdrop">' + poster(movie, 'movie', 'detail-backdrop-art') + '</div><div class="detail-gradient"></div>' +
         '<div class="detail-layout">' + poster(movie, 'movie', 'detail-poster') + '<div class="detail-copy"><div class="eyebrow">Movie</div><h2>' + escapeHtml(titleOf(movie)) + '</h2><div class="metadata-row">' + metadataHtml(movie, 'movie') + (movie.genre ? '<span class="meta-chip">' + escapeHtml(movie.genre) + '</span>' : '') + '</div>' +
@@ -1310,14 +1376,15 @@
         '<div class="detail-actions"><button class="primary-button focusable" id="playMovie">▶ ' + (progress && progress.seconds > 30 ? 'Resume from ' + formatSeconds(progress.seconds) : 'Play movie') + '</button><button class="secondary-button focusable" id="favoriteMovie">' + (favorite ? '♥ Remove favorite' : '♡ Add favorite') + '</button><button class="secondary-button focusable" id="closeDetail">Back</button></div>' +
         '<div class="detail-facts">' + (movie.cast ? '<div><span>Cast</span><strong>' + escapeHtml(movie.cast) + '</strong></div>' : '') + (movie.director ? '<div><span>Director</span><strong>' + escapeHtml(movie.director) + '</strong></div>' : '') + '</div></div></div></section></div>';
       document.getElementById('playMovie').addEventListener('click', function () { self.playMedia(movie, 'movie'); });
-      document.getElementById('favoriteMovie').addEventListener('click', function () { XtreamlyTVStore.toggleFavorite(self.detail.item, 'movie'); self.state = XtreamlyTVStore.getState(); self.renderMovieDetail(); self.toast(favorite ? 'Removed from favorites' : 'Added to favorites'); });
+      document.getElementById('favoriteMovie').addEventListener('click', function () { OvelaStore.toggleFavorite(self.detail.item, 'movie'); self.state = OvelaStore.getState(); self.renderMovieDetail(); self.toast(favorite ? 'Removed from favorites' : 'Added to favorites'); });
       document.getElementById('closeDetail').addEventListener('click', function () { self.closeDetail(); });
-      XtreamlyTVNavigation.focusFirst('#playMovie');
+      OvelaNavigation.focusFirst('#playMovie');
     },
 
     openSeriesDetail: function (series) {
       var self = this;
-      var returnView = this.currentView === 'favorites' ? 'favorites' : 'series';
+      var origin = this.currentView;
+      var returnView = (origin === 'home' || origin === 'live' || origin === 'movies' || origin === 'series' || origin === 'favorites') ? origin : 'series';
       var returnState = this.captureNavigationState();
       this.rememberNavigationState(returnState);
       this.detail = { type: 'series', item: series, info: null, loading: true, error: '', season: null, returnView:returnView, returnState:returnState };
@@ -1387,23 +1454,23 @@
       var episodes = this.episodesForSeason(response, activeSeason).map(function (episode) { return self.normalizeEpisode(episode, series, activeSeason); });
       this.episodeLookup = {};
       episodes.forEach(function (episode) { self.episodeLookup[idOf(episode, 'episode')] = episode; });
-      var favorite = XtreamlyTVStore.isFavorite('series', series.series_id);
+      var favorite = OvelaStore.isFavorite('series', series.series_id);
       view.innerHTML = '<div class="scroll-view detail-scroll"><section class="series-hero"><div class="series-hero-art">' + poster(series, 'series', 'detail-backdrop-art') + '</div><div class="detail-gradient"></div><div class="series-summary">' + poster(series, 'series', 'series-poster') + '<div><div class="eyebrow">Series</div><h2>' + escapeHtml(titleOf(series)) + '</h2><div class="metadata-row">' + metadataHtml(series, 'series') + (series.genre ? '<span class="meta-chip">' + escapeHtml(series.genre) + '</span>' : '') + '</div><p class="detail-plot">' + escapeHtml(descriptionOf(series) || 'No description supplied by this provider.') + '</p><div class="detail-actions"><button class="secondary-button focusable" id="favoriteSeries">' + (favorite ? '♥ Remove favorite' : '♡ Add favorite') + '</button><button class="secondary-button focusable" id="closeSeries">Back</button></div></div></div></section>' +
         '<section class="episode-section"><div class="season-row">' + seasons.map(function (season) { return '<button class="season-button focusable ' + (String(activeSeason) === String(season) ? 'active' : '') + '" data-season="' + escapeHtml(season) + '">Season ' + escapeHtml(season) + '</button>'; }).join('') + '</div>' +
         (this.detail.error ? '<p class="detail-warning">' + escapeHtml(this.detail.error) + '</p>' : '') +
         '<div class="episode-grid">' + (episodes.length ? episodes.map(this.episodeCardHtml.bind(this)).join('') : '<div class="empty-state grid-empty">No episodes were returned for this season.</div>') + '</div></section></div>';
-      document.getElementById('favoriteSeries').addEventListener('click', function () { XtreamlyTVStore.toggleFavorite(self.detail.item, 'series'); self.state = XtreamlyTVStore.getState(); self.renderSeriesDetail(); self.toast(favorite ? 'Removed from favorites' : 'Added to favorites'); });
+      document.getElementById('favoriteSeries').addEventListener('click', function () { OvelaStore.toggleFavorite(self.detail.item, 'series'); self.state = OvelaStore.getState(); self.renderSeriesDetail(); self.toast(favorite ? 'Removed from favorites' : 'Added to favorites'); });
       document.getElementById('closeSeries').addEventListener('click', function () { self.closeDetail(); });
       Array.prototype.forEach.call(document.querySelectorAll('[data-season]'), function (button) {
         button.addEventListener('click', function () { self.detail.season = button.dataset.season; self.renderSeriesDetail(); });
       });
       this.bindEpisodeCards();
-      XtreamlyTVNavigation.focusFirst('.season-button.active, .episode-card');
+      OvelaNavigation.focusFirst('.season-button.active, .episode-card');
     },
 
     episodeCardHtml: function (episode) {
       var id = idOf(episode, 'episode');
-      var progress = XtreamlyTVStore.getProgress('episode', id);
+      var progress = OvelaStore.getProgress('episode', id);
       var percent = progress && progress.duration ? Math.min(100, progress.seconds / progress.duration * 100) : 0;
       return '<button class="episode-card focusable" data-episode-id="' + escapeHtml(id) + '"><span class="episode-number">' + escapeHtml(episode.episode_num || '•') + '</span><div><strong>' + escapeHtml(episodeTitle(episode)) + '</strong><p>' + escapeHtml(descriptionOf(episode) || 'Episode ' + (episode.episode_num || '')) + '</p></div><span class="episode-play">▶</span>' + (percent ? '<div class="episode-progress"><i style="width:' + percent + '%"></i></div>' : '') + '</button>';
     },
@@ -1420,7 +1487,7 @@
 
     favoriteKeyForItem: function (item) {
       var type = typeOf(item);
-      return XtreamlyTVStore.favoriteKey(type, idOf(item, type));
+      return OvelaStore.favoriteKey(type, idOf(item, type));
     },
 
     favoriteSystemGroups: function () {
@@ -1628,7 +1695,7 @@
           '<section class="favorite-content-section favorite-all-hidden"><div class="favorite-grid-empty"><span>◌</span><strong>All favorite groups are hidden.</strong><p>Open Edit groups to show a group again.</p></div></section></div>';
         document.getElementById('addFavoriteGroup').addEventListener('click', function () { self.beginFavoriteEditor(null, 'home'); });
         document.getElementById('editFavoriteGroups').addEventListener('click', function () { self.favoriteMode = 'manager'; self.renderFavorites(); });
-        XtreamlyTVNavigation.focusFirst('#editFavoriteGroups');
+        OvelaNavigation.focusFirst('#editFavoriteGroups');
         this.pendingNavigationRestore = null;
         return;
       }
@@ -1661,7 +1728,7 @@
       if (items.length) this.setupFavoriteGrid(items, group, false, layout);
       if (this.pendingFavoriteFirstFocus && !items.length) this.pendingFavoriteFirstFocus = false;
       if (!focusFirstItem) {
-        XtreamlyTVNavigation.focusFirst('[data-favorite-group].active');
+        OvelaNavigation.focusFirst('[data-favorite-group].active');
         this.applyPendingNavigationRestore();
       }
     },
@@ -1673,7 +1740,7 @@
       var layout = resolvedLayout || this.favoriteGridLayout(group, items, hasRecent);
       this.favoriteGridItems = items.slice();
       container.className = 'favorite-grid ' + layout.className;
-      this.virtualGrid = new XtreamlyTVVirtualGrid({
+      this.virtualGrid = new OvelaVirtualGrid({
         container:container,
         columns:layout.columns,
         visibleRows:layout.visibleRows,
@@ -1741,7 +1808,7 @@
       Array.prototype.forEach.call(document.querySelectorAll('[data-manager-move]'), function (button) {
         button.addEventListener('click', function () { self.moveFavoriteGroup(button.dataset.managerGroup, Number(button.dataset.managerMove)); });
       });
-      XtreamlyTVNavigation.focusFirst(focusSelector || '#favoriteManagerBack');
+      OvelaNavigation.focusFirst(focusSelector || '#favoriteManagerBack');
       if (!focusSelector) this.applyPendingNavigationRestore();
     },
 
@@ -1751,8 +1818,8 @@
       var index = hidden.indexOf(groupId);
       if (index >= 0) hidden.splice(index, 1);
       else hidden.push(groupId);
-      XtreamlyTVStore.updateSettings({ hiddenFavoriteGroupIds:hidden });
-      this.state = XtreamlyTVStore.getState();
+      OvelaStore.updateSettings({ hiddenFavoriteGroupIds:hidden });
+      this.state = OvelaStore.getState();
       delete this.navigationStates.favorites;
       this.pendingNavigationRestore = null;
       this.persistNavigationStates();
@@ -1772,8 +1839,8 @@
       if (from < 0 || from === to) return;
       var value = order.splice(from, 1)[0];
       order.splice(to, 0, value);
-      XtreamlyTVStore.saveFavoriteGroupOrder(order);
-      this.state = XtreamlyTVStore.getState();
+      OvelaStore.saveFavoriteGroupOrder(order);
+      this.state = OvelaStore.getState();
       var selector = '[data-manager-group="' + String(groupId).replace(/"/g, '\\"') + '"][data-manager-move="' + (delta > 0 ? '1' : '-1') + '"]';
       this.renderFavoriteManager(selector);
       this.toast('Group order saved');
@@ -1816,7 +1883,7 @@
       Array.prototype.forEach.call(document.querySelectorAll('[data-item-manager-move]'), function (button) {
         button.addEventListener('click', function () { self.moveFavoriteItem(button.dataset.itemManagerKey, Number(button.dataset.itemManagerMove)); });
       });
-      XtreamlyTVNavigation.focusFirst('#favoriteItemManagerBack');
+      OvelaNavigation.focusFirst('#favoriteItemManagerBack');
     },
 
     moveFavoriteItem: function (key, delta) {
@@ -1830,13 +1897,13 @@
       if (from < 0 || from === to) return;
       var value = order.splice(from, 1)[0];
       order.splice(to, 0, value);
-      XtreamlyTVStore.saveFavoriteItemOrder(manager.groupId, order);
-      this.state = XtreamlyTVStore.getState();
+      OvelaStore.saveFavoriteItemOrder(manager.groupId, order);
+      this.state = OvelaStore.getState();
       this.renderFavoriteItemManager();
       var newList = document.getElementById('favoriteItemManagerList');
       if (newList) newList.scrollTop = scrollTop;
       setTimeout(function () {
-        XtreamlyTVNavigation.focusFirst('[data-item-manager-key="' + String(key).replace(/"/g, '\\"') + '"][data-item-manager-move="' + (delta > 0 ? '1' : '-1') + '"]');
+        OvelaNavigation.focusFirst('[data-item-manager-key="' + String(key).replace(/"/g, '\\"') + '"][data-item-manager-move="' + (delta > 0 ? '1' : '-1') + '"]');
       }, 0);
     },
 
@@ -1850,8 +1917,8 @@
       this.favoriteMode = returnMode;
       this.renderFavorites();
       setTimeout(function () {
-        if (returnMode === 'manager') XtreamlyTVNavigation.focusFirst('[data-manager-items="' + String(manager.groupId).replace(/"/g, '\\"') + '"]');
-        else XtreamlyTVNavigation.focusFirst('#reorderFavoriteItems, [data-favorite-group].active');
+        if (returnMode === 'manager') OvelaNavigation.focusFirst('[data-manager-items="' + String(manager.groupId).replace(/"/g, '\\"') + '"]');
+        else OvelaNavigation.focusFirst('#reorderFavoriteItems, [data-favorite-group].active');
       }, 0);
     },
 
@@ -1953,7 +2020,7 @@
         button.addEventListener('click', function () {
           editor.filter = button.dataset.editorFavoriteFilter;
           self.renderFavoriteEditor();
-          XtreamlyTVNavigation.focusFirst('[data-editor-favorite-filter="' + editor.filter + '"]');
+          OvelaNavigation.focusFirst('[data-editor-favorite-filter="' + editor.filter + '"]');
         });
       });
       function cancelEditor() {
@@ -1970,8 +2037,8 @@
         if (editor.system) {
           var overrides = Object.assign({}, self.state.settings && self.state.settings.favoriteSystemGroupOverrides || {});
           overrides[editor.id] = { name:editor.name, icon:editor.icon, color:editor.color };
-          XtreamlyTVStore.updateSettings({ favoriteSystemGroupOverrides:overrides });
-          self.state = XtreamlyTVStore.getState();
+          OvelaStore.updateSettings({ favoriteSystemGroupOverrides:overrides });
+          self.state = OvelaStore.getState();
           self.favoriteEditor = null;
           self.favoriteGroupId = editor.id;
           self.favoriteMode = self.favoriteEditorReturnMode === 'manager' ? 'manager' : (editor.id === 'all' ? 'home' : 'group');
@@ -1979,8 +2046,8 @@
           self.renderFavorites();
           return;
         }
-        var saved = XtreamlyTVStore.saveFavoriteGroup(editor);
-        self.state = XtreamlyTVStore.getState();
+        var saved = OvelaStore.saveFavoriteGroup(editor);
+        self.state = OvelaStore.getState();
         self.favoriteEditor = null;
         self.favoriteGroupId = saved.id;
         self.favoriteFilter = 'all';
@@ -1996,8 +2063,8 @@
           self.toast('Press Delete group again to confirm');
           return;
         }
-        XtreamlyTVStore.deleteFavoriteGroup(editor.id);
-        self.state = XtreamlyTVStore.getState();
+        OvelaStore.deleteFavoriteGroup(editor.id);
+        self.state = OvelaStore.getState();
         self.favoriteEditor = null;
         self.favoriteGroupId = 'all';
         self.favoriteMode = self.favoriteEditorReturnMode || 'manager';
@@ -2008,7 +2075,7 @@
       if (!editor.system) this.setupFavoriteEditorGrid(filtered, editor.filter || 'all');
       var menuHint = document.getElementById('menuHint');
       if (menuHint) { menuHint.classList.remove('visible'); menuHint.setAttribute('aria-hidden', 'true'); }
-      XtreamlyTVNavigation.focusFirst('#cancelFavoriteEditorTop');
+      OvelaNavigation.focusFirst('#cancelFavoriteEditorTop');
     },
 
     setupFavoriteEditorGrid: function (items, filter) {
@@ -2021,7 +2088,7 @@
       }
       var layout = this.favoriteEditorGridLayout(items, filter);
       container.className = 'favorite-editor-grid ' + layout.className;
-      this.virtualGrid = new XtreamlyTVVirtualGrid({
+      this.virtualGrid = new OvelaVirtualGrid({
         container:container,
         columns:layout.columns,
         visibleRows:layout.visibleRows,
@@ -2051,9 +2118,6 @@
       var credentials = this.state.credentials || { sourceType:'xtream', server:'', username:'', password:'' };
       var sourceType = (credentials.sourceType || credentials.source_type) === 'm3u' ? 'm3u' : 'xtream';
       var isM3u = sourceType === 'm3u';
-      var themes = [
-        { id: 'blue', label: 'Blue (default)' }, { id: 'teal', label: 'Teal' }, { id: 'gray', label: 'Graphite' }, { id: 'purple', label: 'Purple' }, { id: 'pink', label: 'Pink' }
-      ];
       var maskedPassword = credentials.password ? '••••••••' : 'Not set';
       var alternateHosts = Array.isArray(credentials.alternateServers) ? credentials.alternateServers.join('\n') : '';
       var providerSummary = isM3u
@@ -2062,21 +2126,13 @@
       view.innerHTML = '<div class="scroll-view"><div class="settings-grid">' +
         '<section class="settings-card provider-card-wide"><h3>Provider</h3><p>Your saved source. Credentials and playlist details stay on this TV. Select Edit provider only when you want to change the fields.</p><div class="provider-summary">' + providerSummary + '</div><div class="settings-actions provider-summary-actions"><button id="editProvider" class="primary-button focusable">Edit provider</button><button id="signOut" class="danger-button focusable">Disconnect provider</button></div><div id="providerEditor" class="provider-editor" hidden><label class="field"><span>Source type</span><select id="providerSourceType" class="focusable"><option value="xtream"' + (!isM3u ? ' selected' : '') + '>Xtream account</option><option value="m3u"' + (isM3u ? ' selected' : '') + '>M3U / M3U+ playlist</option></select></label><div id="providerXtreamFields"' + (isM3u ? ' hidden' : '') + '><div class="provider-settings-grid"><label class="field provider-server"><span>Server URL</span><input id="providerServer" class="focusable" type="url" value="' + escapeHtml(credentials.server || '') + '" autocomplete="off"></label><label class="field"><span>Username</span><input id="providerUsername" class="focusable" value="' + escapeHtml(credentials.username || '') + '" autocomplete="off"></label><label class="field"><span>Password</span><input id="providerPassword" class="focusable" type="password" value="' + escapeHtml(credentials.password || '') + '" autocomplete="off"></label></div><label class="field"><span>Alternate hosts (optional, one per line)</span><textarea id="providerXtreamAlternates" class="focusable" rows="2">' + escapeHtml(alternateHosts) + '</textarea></label></div>' +
         '<div id="providerM3uFields"' + (!isM3u ? ' hidden' : '') + '><label class="field"><span>Playlist URL</span><input id="providerPlaylist" class="focusable" type="url" value="' + escapeHtml(credentials.playlistUrl || credentials.playlist_url || '') + '" autocomplete="off"></label><label class="field"><span>Alternate hosts (optional, one per line)</span><textarea id="providerAlternates" class="focusable" rows="2">' + escapeHtml(alternateHosts) + '</textarea></label></div><div class="settings-actions"><button id="saveProvider" class="primary-button focusable">Save and reconnect</button><button id="cancelProviderEdit" class="secondary-button focusable">Cancel</button></div></div></section>' +
-        '<section class="settings-card theme-card-wide"><h3>Appearance</h3><p>Choose a skin. The layout stays identical while the background, panels, focus ring, and highlights change hue.</p><div class="theme-picker">' + themes.map(function (theme) { return '<button class="theme-choice focusable ' + (settings.theme === theme.id ? 'active' : '') + '" data-theme-choice="' + theme.id + '"><i class="theme-preview theme-' + theme.id + '"></i><span>' + theme.label + '</span><b>' + (settings.theme === theme.id ? '✓' : '') + '</b></button>'; }).join('') + '</div></section>' +
-        '<section class="settings-card"><h3>Playback compatibility</h3><p>Automatic mode tries HLS and MPEG-TS. If audio starts without video, XtreamlyTV retries the alternate container.</p><label class="field"><span>Preferred live format</span><select id="formatSetting" class="focusable"><option value="auto"' + (settings.streamFormat === 'auto' || !settings.streamFormat ? ' selected' : '') + '>Automatic fallback</option><option value="m3u8"' + (settings.streamFormat === 'm3u8' ? ' selected' : '') + '>HLS first</option><option value="ts"' + (settings.streamFormat === 'ts' ? ' selected' : '') + '>MPEG-TS first</option></select></label><button id="savePlayback" class="primary-button focusable">Save playback</button></section>' +
+        '<section class="settings-card"><h3>Playback compatibility</h3><p>Automatic mode tries HLS and MPEG-TS. If audio starts without video, Ovela retries the alternate container.</p><label class="field"><span>Preferred live format</span><select id="formatSetting" class="focusable"><option value="auto"' + (settings.streamFormat === 'auto' || !settings.streamFormat ? ' selected' : '') + '>Automatic fallback</option><option value="m3u8"' + (settings.streamFormat === 'm3u8' ? ' selected' : '') + '>HLS first</option><option value="ts"' + (settings.streamFormat === 'ts' ? ' selected' : '') + '>MPEG-TS first</option></select></label><button id="savePlayback" class="primary-button focusable">Save playback</button></section>' +
         '<section class="settings-card"><h3>Performance</h3><p>Only visible cards are added to the DOM. Category data is cached temporarily to make back-and-forth browsing quick without consuming excessive TV memory.</p><label class="field"><span>Cached categories per library</span><select id="cacheSetting" class="focusable"><option value="2"' + (Number(settings.maxCachedCategories || 3) === 2 ? ' selected' : '') + '>2 — lowest memory</option><option value="3"' + (Number(settings.maxCachedCategories || 3) === 3 ? ' selected' : '') + '>3 — balanced</option><option value="5"' + (Number(settings.maxCachedCategories || 3) === 5 ? ' selected' : '') + '>5 — faster revisits</option></select></label><button id="savePerformance" class="primary-button focusable">Save performance</button><button id="clearCatalogCache" class="secondary-button focusable settings-secondary">Clear catalog cache</button></section>' +
         '<section class="settings-card"><h3>API bridge</h3><p>Optional authenticated local bridge for Xtream servers or M3U hosts that do not permit CORS requests from a TV web app.</p><label class="field"><span>Bridge URL</span><input id="proxySetting" class="focusable" value="' + escapeHtml(settings.apiProxy || '') + '" placeholder="http://unraid.local:8787"></label><label class="field"><span>Bridge token</span><input id="proxyTokenSetting" class="focusable" type="password" value="' + escapeHtml(settings.apiProxyToken || '') + '" autocomplete="off"></label><button id="saveProxy" class="primary-button focusable">Save bridge</button></section>' +
         '<section class="settings-card"><h3>Catalog diagnostics</h3><p>Loaded in memory: ' + this.loadedCount('live').toLocaleString() + ' channels, ' + this.loadedCount('movies').toLocaleString() + ' movies, and ' + this.loadedCount('series').toLocaleString() + ' series. Provider catalogs remain category-scoped so the full library is never loaded into TV memory at once.</p><div class="diagnostic-pill">Virtual rendering active</div><div class="diagnostic-pill">Series discovery: ' + escapeHtml(this.seriesDiscovery) + '</div></section>' +
-        '<section class="settings-card"><h3>About XtreamlyTV</h3><div class="about-list"><div><span>Version</span><strong>' + APP_VERSION + '</strong></div><div><span>Application ID</span><strong>' + APP_ID + '</strong></div><div><span>Platform</span><strong>LG webOS TV</strong></div><div><span>License</span><strong>MIT open source</strong></div><div><span>Content</span><strong>No channels or subscriptions included</strong></div></div></section>' +
-        '<section class="settings-card"><h3>Privacy & history</h3><p>XtreamlyTV has no analytics, advertising, or tracking. Provider credentials, favorites, recent items, and resume positions are stored locally on the TV.</p><button id="clearHistory" class="secondary-button focusable">Clear watch history</button></section>' +
+        '<section class="settings-card"><h3>About Ovela</h3><div class="about-list"><div><span>Version</span><strong>' + APP_VERSION + '</strong></div><div><span>Application ID</span><strong>' + APP_ID + '</strong></div><div><span>Platform</span><strong>LG webOS TV</strong></div><div><span>License</span><strong>Apache-2.0 open source</strong></div><div><span>Content</span><strong>No channels or subscriptions included</strong></div></div></section>' +
+        '<section class="settings-card"><h3>Privacy & history</h3><p>Ovela has no analytics, advertising, or tracking. Provider credentials, favorites, recent items, and resume positions are stored locally on the TV.</p><button id="clearHistory" class="secondary-button focusable">Clear watch history</button></section>' +
         '</div></div>';
-      Array.prototype.forEach.call(document.querySelectorAll('[data-theme-choice]'), function (button) {
-        button.addEventListener('click', function () {
-          self.applyTheme(button.dataset.themeChoice, true);
-          self.renderSettings();
-          self.toast('Skin changed to ' + button.textContent.replace('✓', '').trim());
-        });
-      });
       function refreshProviderEditorFields() {
         var selected = document.getElementById('providerSourceType');
         var m3u = selected && selected.value === 'm3u';
@@ -2084,7 +2140,7 @@
         var m3uFields = document.getElementById('providerM3uFields');
         if (xtreamFields) xtreamFields.hidden = m3u;
         if (m3uFields) m3uFields.hidden = !m3u;
-        XtreamlyTVNavigation.invalidate();
+        OvelaNavigation.invalidate();
       }
       var providerSourceType = document.getElementById('providerSourceType');
       if (providerSourceType) providerSourceType.addEventListener('change', refreshProviderEditorFields);
@@ -2093,15 +2149,15 @@
         if (!editor) return;
         editor.hidden = false;
         refreshProviderEditorFields();
-        XtreamlyTVNavigation.invalidate();
+        OvelaNavigation.invalidate();
         var m3u = document.getElementById('providerSourceType').value === 'm3u';
-        setTimeout(function () { XtreamlyTVNavigation.focusFirst(m3u ? '#providerPlaylist' : '#providerServer'); }, 0);
+        setTimeout(function () { OvelaNavigation.focusFirst(m3u ? '#providerPlaylist' : '#providerServer'); }, 0);
       });
       document.getElementById('cancelProviderEdit').addEventListener('click', function () {
         var editor = document.getElementById('providerEditor');
         if (editor) editor.hidden = true;
-        XtreamlyTVNavigation.invalidate();
-        XtreamlyTVNavigation.focusFirst('#editProvider');
+        OvelaNavigation.invalidate();
+        OvelaNavigation.focusFirst('#editProvider');
       });
       document.getElementById('saveProvider').addEventListener('click', function () {
         var selectedSource = document.getElementById('providerSourceType').value;
@@ -2118,23 +2174,26 @@
           ).value || '').split(/[\n,]+/)
         }, self.state.settings || {});
       });
-      document.getElementById('savePlayback').addEventListener('click', function () { XtreamlyTVStore.updateSettings({ streamFormat: document.getElementById('formatSetting').value }); self.refreshStateAndApi(); self.toast('Playback setting saved'); });
-      document.getElementById('savePerformance').addEventListener('click', function () { XtreamlyTVStore.updateSettings({ maxCachedCategories: Number(document.getElementById('cacheSetting').value) }); self.state = XtreamlyTVStore.getState(); self.toast('Performance setting saved'); });
+      document.getElementById('savePlayback').addEventListener('click', function () { OvelaStore.updateSettings({ streamFormat: document.getElementById('formatSetting').value }); self.refreshStateAndApi(); self.toast('Playback setting saved'); });
+      document.getElementById('savePerformance').addEventListener('click', function () { OvelaStore.updateSettings({ maxCachedCategories: Number(document.getElementById('cacheSetting').value) }); self.state = OvelaStore.getState(); self.toast('Performance setting saved'); });
       document.getElementById('clearCatalogCache').addEventListener('click', function () { self.resetCatalog(true); self.activeCategory.live = self.firstCategoryId('live'); self.activeCategory.movies = self.firstCategoryId('movies'); self.activeCategory.series = self.firstCategoryId('series'); self.toast('Catalog cache cleared'); self.renderSettings(); });
-      document.getElementById('saveProxy').addEventListener('click', function () { XtreamlyTVStore.updateSettings({ apiProxy: document.getElementById('proxySetting').value.trim().replace(/\/+$/, ''), apiProxyToken: document.getElementById('proxyTokenSetting').value }); self.refreshStateAndApi(); self.toast('API bridge saved'); });
-      document.getElementById('signOut').addEventListener('click', function () { self.demo = false; self.detail = null; self.resetCatalog(); self.api = null; self.profile = null; XtreamlyTVStore.clearCredentials(); self.state = XtreamlyTVStore.getState(); self.renderLogin(); });
-      document.getElementById('clearHistory').addEventListener('click', function () { XtreamlyTVStore.clearHistory(); self.state = XtreamlyTVStore.getState(); self.toast('Watch history and resume positions cleared'); });
-      XtreamlyTVNavigation.focusFirst('#editProvider');
+      document.getElementById('saveProxy').addEventListener('click', function () { OvelaStore.updateSettings({ apiProxy: document.getElementById('proxySetting').value.trim().replace(/\/+$/, ''), apiProxyToken: document.getElementById('proxyTokenSetting').value }); self.refreshStateAndApi(); self.toast('API bridge saved'); });
+      document.getElementById('signOut').addEventListener('click', function () { self.demo = false; self.detail = null; self.resetCatalog(); self.api = null; self.profile = null; OvelaStore.clearCredentials(); self.state = OvelaStore.getState(); self.renderLogin(); });
+      document.getElementById('clearHistory').addEventListener('click', function () { OvelaStore.clearHistory(); self.state = OvelaStore.getState(); self.toast('Watch history and resume positions cleared'); });
+      /* Settings opens at the top of the page. The Favorites & Lists card is
+         injected above the provider card, so focusing #editProvider directly
+         started the viewer halfway down the screen. */
+      OvelaNavigation.focusFirst('.settings-grid .focusable');
     },
 
     refreshStateAndApi: function () {
-      this.state = XtreamlyTVStore.getState();
+      this.state = OvelaStore.getState();
       this.applyTheme(this.state.settings.theme || 'blue');
       if (!this.state.credentials) return;
       var sourceType = this.state.credentials.sourceType || this.state.credentials.source_type;
       this.api = sourceType === 'm3u'
-        ? new XtreamlyTVM3uApi(this.state.credentials, this.state.settings)
-        : new XtreamlyTVApi(this.state.credentials, this.state.settings);
+        ? new OvelaM3uApi(this.state.credentials, this.state.settings)
+        : new OvelaApi(this.state.credentials, this.state.settings);
     },
 
     mediaSubtitle: function (item, type) {
@@ -2145,11 +2204,8 @@
 
     buildPlaybackCandidates: function (item, type) {
       if (this.demo) return [];
-      var resolved = this.api.findItem ? this.api.findItem(item) || item : item;
-      if (type === 'live') {
-        return this.api.getLiveCandidates(resolved && resolved.stream_id || resolved, this.providerAllowedFormats());
-      }
-      return this.api.getMediaCandidates(type, resolved, item.container_extension);
+      if (type === 'live') return this.api.getLiveCandidates(item.stream_id, this.providerAllowedFormats());
+      return this.api.getMediaCandidates(type, idOf(item, type), item.container_extension);
     },
 
     buildChannelSwitchList: function (item, requested) {
@@ -2183,12 +2239,12 @@
         if (cached.length > 1 && containsCurrent(cached)) return cached;
       }
 
-      var fallback = uniqueLive([item]
-        .concat(preferred)
-        .concat(this.loadedItems('live'))
+      var fallback = [item].concat(preferred);
+      this.forEachLoadedItem('live', function (channel) { fallback.push(channel); });
+      fallback = fallback
         .concat((this.state.favorites || []).filter(function (entry) { return typeOf(entry) === 'live'; }))
-        .concat((this.state.recent || []).filter(function (entry) { return typeOf(entry) === 'live'; })));
-      return fallback;
+        .concat((this.state.recent || []).filter(function (entry) { return typeOf(entry) === 'live'; }));
+      return uniqueLive(fallback);
     },
 
     playMedia: function (item, type, list, parent) {
@@ -2209,13 +2265,15 @@
       this.playbackResumeTimer = null;
       this.playbackResumeToastShown = false;
       if (type !== 'live') {
-        var savedProgress = XtreamlyTVStore.getProgress(type, idOf(item, type));
+        var savedProgress = OvelaStore.getProgress(type, idOf(item, type));
         var savedSeconds = savedProgress ? Number(savedProgress.seconds || 0) : 0;
         if (isFinite(savedSeconds) && savedSeconds > 30) this.playbackResumeTarget = savedSeconds;
         else this.playbackProgressRestored = true;
       }
       this.playbackSwitching = false;
       this.playbackFailureLock = false;
+      this.playerErrorOpen = false;
+      this.playerErrorRetryAvailable = false;
       this.playerHasPlayed = false;
       this.lastPlaybackToggleAt = 0;
       clearTimeout(this.playbackBufferTimer);
@@ -2223,16 +2281,16 @@
       this.lastPlaybackProgressAt = 0;
       this.lastPlaybackTime = 0;
       this.lastProgressSave = 0;
-      XtreamlyTVStore.addRecent(item, type);
-      this.state = XtreamlyTVStore.getState();
+      OvelaStore.addRecent(item, type);
+      this.state = OvelaStore.getState();
       var artwork = type === 'live' ? logo(item) : poster(item, type, 'player-poster');
-      var hints = type === 'live' ? '<span class="key">▲▼</span> Channel &nbsp; <span class="key">◀▶</span> Rewind / forward<br><span class="key">OK</span> Pause / play &nbsp; <span class="key green-key">GREEN</span> Go live &nbsp; <span class="key red-key">RED</span> Favorite' : '<span class="key">◀▶</span> Seek 30 seconds<br><span class="key">OK</span> Pause / play &nbsp; <span class="key red-key">RED</span> Favorite';
+      var hints = type === 'live' ? '<span class="key">▲▼</span> Channel &nbsp; <span class="key">◀▶</span> Rewind / forward<br><span class="key">OK</span> Controls &nbsp; <span class="key green-key">GREEN</span> Go live &nbsp; <span class="key red-key">RED</span> Favorite' : '<span class="key">◀▶</span> Seek 30 seconds<br><span class="key">OK</span> Pause / play &nbsp; <span class="key red-key">RED</span> Favorite';
       var player = document.createElement('section');
       player.className = 'player overlay';
       player.id = 'player';
       player.innerHTML = '<video id="video" autoplay playsinline webkit-playsinline preload="auto"></video><div class="player-shade"></div>' +
         '<div id="playerLoading" class="player-loading"><div class="spinner"></div><strong id="playerLoadingText">Opening stream…</strong><span id="playerFormatLabel"></span></div>' +
-        '<div class="player-top"><div class="player-brand"><img class="brand-wordmark" src="assets/xtreamlytv-wordmark.svg" alt="XtreamlyTV"></div><div class="player-clock">' + formatTime(new Date()) + '</div></div>' +
+        '<div class="player-top"><div class="player-brand"><div class="ovela-lockup"><span class="ovela-mark" aria-hidden="true"></span><img class="ovela-word" src="assets/ovela-wordmark.png" alt="Ovela" aria-hidden="true"></div></div><div class="player-clock">' + formatTime(new Date()) + '</div></div>' +
         '<div class="player-bottom"><div id="playerTimeline" class="player-timeline"><span id="currentTime">0:00</span><div id="playerProgressTrack" class="player-progress"><i id="playerProgress"></i><b id="playerScrubber"></b></div><span id="durationTime">0:00</span><button id="goLiveButton" class="go-live-button" type="button">Go Live</button></div>' +
         '<div class="player-transport"><button id="rewindButton" type="button">−30</button><button id="playPauseButton" class="play-pause-button" type="button">Pause</button><button id="forwardButton" type="button">+30</button></div>' +
         '<div class="player-info"><div id="playerArtwork">' + artwork + '</div><div><div id="playerTitle" class="player-channel">' + escapeHtml(type === 'episode' ? episodeTitle(item) : titleOf(item)) + '</div><div id="playerProgram" class="player-program">' + escapeHtml(this.mediaSubtitle(item, type)) + '</div><div id="playerDescription" class="player-program-description">' + escapeHtml(type === 'live' ? '' : descriptionOf(item)) + '</div></div>' +
@@ -2254,7 +2312,9 @@
 
       document.getElementById('rewindButton').addEventListener('click', function () { self.seek(-30); });
       document.getElementById('forwardButton').addEventListener('click', function () { self.seek(30); });
-      document.getElementById('playPauseButton').addEventListener('click', function () { self.togglePlayback(); });
+      var playPauseButton = document.getElementById('playPauseButton');
+      playPauseButton.addEventListener('click', function () { self.togglePlayback(); });
+      if (type === 'live') playPauseButton.style.display = 'none';
       document.getElementById('goLiveButton').addEventListener('click', function () { self.goToLive(); });
       var progressTrack = document.getElementById('playerProgressTrack');
       function seekFromPointer(event) {
@@ -2275,10 +2335,19 @@
       });
 
       if (this.demo) {
-        this.showPlayerError('Demo mode', 'Connect your provider to play this content. Demo mode is for exploring XtreamlyTV’s interface and remote navigation.');
+        this.showPlayerError('Demo mode', 'Connect your provider to play this content. Demo mode is for exploring Ovela’s interface and remote navigation.');
         return;
       }
       var video = document.getElementById('video');
+      // Magic Remote pointer clicks and mouse clicks land on the picture. Live TV
+      // only reveals the overlay (a live feed has no pause), on-demand keeps the
+      // existing OK behaviour of toggling playback. The gesture layer is the video
+      // element itself, so the overlay controls stay individually clickable.
+      player.addEventListener('click', function (event) {
+        if (event.target !== video) return;
+        if (self.playerErrorOpen) return;
+        self.togglePlayback();
+      });
       video.addEventListener('error', function () { self.tryNextPlaybackCandidate('The current stream format failed.'); });
       video.addEventListener('loadedmetadata', function () {
         self.restoreProgress(video);
@@ -2309,13 +2378,15 @@
       video.addEventListener('pause', function () {
         self.clearPlayerBuffering();
         self.updateTransportState(video);
+        if (self.playerOpen && self.playerType && self.playerMedia && self.playerHasPlayed) self.maybeSaveProgress(video, true);
+        OvelaStore.flush();
         if (!self.playbackSwitching && self.playerHasPlayed) self.showOverlay(true);
       });
       video.addEventListener('waiting', function () { self.schedulePlayerBuffering(video, 'Buffering stream…', 1800); });
       video.addEventListener('stalled', function () { self.schedulePlayerBuffering(video, 'Stream stalled…', 2600); });
       video.addEventListener('progress', function () { if (video.readyState >= 3) self.clearPlayerBuffering(); self.updatePlayerProgress(video); });
       video.addEventListener('timeupdate', function () { self.onPlaybackProgress(video); });
-      video.addEventListener('ended', function () { if (self.playerType !== 'live') XtreamlyTVStore.clearProgress(self.playerType, idOf(self.playerMedia, self.playerType)); self.updateTransportState(video); });
+      video.addEventListener('ended', function () { if (self.playerType !== 'live') OvelaStore.clearProgress(self.playerType, idOf(self.playerMedia, self.playerType)); self.updateTransportState(video); });
       this.loadPlaybackCandidate(0, 'Opening stream…');
     },
 
@@ -2340,15 +2411,24 @@
         this.showPlayerError('Unable to build a stream URL', 'The provider did not expose a compatible playback URL.');
         return;
       }
+      this.playerErrorOpen = false;
+      this.playerErrorRetryAvailable = false;
+      var previousError = document.querySelector('#player .player-error');
+      if (previousError) previousError.remove();
       clearTimeout(this.playbackWatchdog);
       clearTimeout(this.playbackRetryTimer);
+      clearTimeout(this.playbackStartTimer);
       this.playbackRetryTimer = null;
+      this.playbackStartTimer = null;
       clearTimeout(this.playbackResumeTimer);
       this.playbackResumeTimer = null;
       this.playbackResumeAttempts = 0;
       this.playbackProgressRestored = this.playerType === 'live' || !(Number(this.playbackResumeTarget || 0) > 30);
       this.clearPlayerBuffering(true);
       this.playbackCandidateIndex = index;
+      this.playbackLoadId = (this.playbackLoadId || 0) + 1;
+      var loadId = this.playbackLoadId;
+      var requestedMedia = this.playerMedia;
       this.playbackStartedAt = Date.now();
       this.lastPlaybackProgressAt = 0;
       this.lastPlaybackTime = 0;
@@ -2370,8 +2450,17 @@
         video.appendChild(source);
         video.load();
         var playPromise = video.play();
+        this.startPlaybackWatchdog(video);
         if (playPromise && typeof playPromise.catch === 'function') {
-          playPromise.catch(function () { setTimeout(function () { self.tryNextPlaybackCandidate('Playback could not start.'); }, 300); });
+          playPromise.catch(function () {
+            if (!self.playerOpen || self.playbackLoadId !== loadId || self.playerMedia !== requestedMedia) return;
+            clearTimeout(self.playbackStartTimer);
+            self.playbackStartTimer = setTimeout(function () {
+              self.playbackStartTimer = null;
+              if (!self.playerOpen || self.playbackLoadId !== loadId || self.playerMedia !== requestedMedia) return;
+              self.tryNextPlaybackCandidate('Playback could not start.');
+            }, 300);
+          });
         }
       } catch (error) {
         this.tryNextPlaybackCandidate(error.message || 'Playback failed.');
@@ -2440,7 +2529,8 @@
       clearTimeout(this.playbackWatchdog);
       function check() {
         self.playbackWatchdog = null;
-        if (!self.playerOpen || !video || video.paused || video.ended || self.playbackSwitching) return;
+        if (!self.playerOpen || !video || video.ended) return;
+        if (video.paused && self.playerHasPlayed) return;
         var now = Date.now();
         var current = isFinite(video.currentTime) ? video.currentTime : 0;
         if (video.error) {
@@ -2472,7 +2562,14 @@
       var current = this.playbackCandidates[this.playbackCandidateIndex];
       var retries = this.playbackCandidateRetries || (this.playbackCandidateRetries = {});
       var retryCount = Number(retries[this.playbackCandidateIndex] || 0);
-      if (this.playerType === 'live' && current && retryCount < 1) {
+      var decision = window.OvelaCore.recoveryDecision({
+        candidateIndex: this.playbackCandidateIndex,
+        candidateCount: this.playbackCandidates.length,
+        attempts: this.playerType === 'live' ? retryCount : 1,
+        maxAttempts: 1,
+        retryBeforeNext: this.playerType === 'live'
+      }, { kind: 'transient' });
+      if (decision.action === 'retry' && this.playerType === 'live' && current) {
         var self = this;
         var retryIndex = this.playbackCandidateIndex;
         var retryMedia = this.playerMedia;
@@ -2488,7 +2585,7 @@
         return;
       }
       var next = this.playbackCandidateIndex + 1;
-      if (next < this.playbackCandidates.length) {
+      if (decision.action === 'next' && next < this.playbackCandidates.length) {
         this.toast(reason + ' Trying ' + this.playbackCandidates[next].label + '…');
         this.loadPlaybackCandidate(next, reason);
         return;
@@ -2560,12 +2657,12 @@
       }, 180);
     },
 
-    maybeSaveProgress: function (video) {
-      if (this.playerType === 'live' || !video || !isFinite(video.currentTime)) return;
+    maybeSaveProgress: function (video, force) {
+      if (!this.playerOpen || !this.playerType || !this.playerMedia || this.playerType === 'live' || !video || !isFinite(video.currentTime)) return;
       if (!this.playbackProgressRestored && Number(this.playbackResumeTarget || 0) > 30) return;
-      if (Date.now() - this.lastProgressSave < 10000) return;
+      if (!force && Date.now() - this.lastProgressSave < 10000) return;
       this.lastProgressSave = Date.now();
-      XtreamlyTVStore.saveProgress(this.playerType, idOf(this.playerMedia, this.playerType), video.currentTime, video.duration);
+      OvelaStore.saveProgress(this.playerType, idOf(this.playerMedia, this.playerType), video.currentTime, video.duration);
     },
 
     liveSeekRange: function (video) {
@@ -2628,6 +2725,15 @@
     updateTransportState: function (video) {
       var button = document.getElementById('playPauseButton');
       if (!button || !video) return;
+      if (this.playerType === 'live') {
+        // A live feed has no meaningful paused state. Keep the transport button
+        // out of the overlay so a remote or pointer can never freeze it.
+        button.style.display = 'none';
+        var livePlayer = document.getElementById('player');
+        if (livePlayer) livePlayer.classList.remove('paused');
+        return;
+      }
+      button.style.display = '';
       button.textContent = video.paused ? 'Play' : 'Pause';
       button.setAttribute('aria-label', video.paused ? 'Play' : 'Pause');
       var player = document.getElementById('player');
@@ -2638,6 +2744,11 @@
     },
 
     togglePlayback: function () {
+      if (this.playerType === 'live') {
+        // OK / play-pause on Live TV only reveals the control surface.
+        this.showOverlay();
+        return;
+      }
       var self = this;
       var video = document.getElementById('video');
       if (!video || this.playbackSwitching) return;
@@ -2670,8 +2781,64 @@
       this.showOverlay();
     },
 
-    showPlayerError: function (title, message) {
+    retryPlayback: function () {
+      if (!this.playerOpen || !this.playerErrorRetryAvailable || !this.playbackCandidates.length) return;
       clearTimeout(this.playbackWatchdog);
+      clearTimeout(this.playbackRetryTimer);
+      clearTimeout(this.playbackStartTimer);
+      clearTimeout(this.playbackBufferTimer);
+      clearTimeout(this.playbackResumeTimer);
+      clearTimeout(this.overlayTimer);
+      this.playbackWatchdog = null;
+      this.playbackRetryTimer = null;
+      this.playbackStartTimer = null;
+      this.playbackBufferTimer = null;
+      this.playbackResumeTimer = null;
+      this.overlayTimer = null;
+      this.playerErrorOpen = false;
+      this.playerErrorRetryAvailable = false;
+      var error = document.querySelector('#player .player-error');
+      if (error) error.remove();
+      if (this.playerType !== 'live') {
+        var retryVideo = document.getElementById('video');
+        var retryCurrent = retryVideo && isFinite(retryVideo.currentTime) ? Number(retryVideo.currentTime) : 0;
+        var retryTarget = this.playbackResumeTarget;
+        if (retryCurrent > 0) {
+          retryTarget = retryCurrent;
+        } else if (this.playerMedia) {
+          var savedProgress = OvelaStore.getProgress(this.playerType, idOf(this.playerMedia, this.playerType));
+          var savedSeconds = savedProgress ? Number(savedProgress.seconds || 0) : 0;
+          if (isFinite(savedSeconds) && savedSeconds > 30) retryTarget = savedSeconds;
+        }
+        var retrySeconds = Number(retryTarget || 0);
+        this.playbackResumeTarget = isFinite(retrySeconds) && retrySeconds > 30 ? retrySeconds : null;
+        this.playbackProgressRestored = this.playbackResumeTarget === null;
+      }
+      this.playbackFailureLock = false;
+      this.playbackCandidateIndex = 0;
+      this.playbackCandidateRetries = {};
+      this.playbackSwitching = false;
+      this.playerHasPlayed = false;
+      this.playbackResumeAttempts = 0;
+      this.playbackResumeToastShown = false;
+      this.lastPlaybackToggleAt = 0;
+      this.lastPlaybackProgressAt = 0;
+      this.lastPlaybackTime = 0;
+      this.loadPlaybackCandidate(0, 'Reconnecting stream…');
+    },
+
+    showPlayerError: function (title, message) {
+      OvelaStore.flush();
+      clearTimeout(this.playbackWatchdog);
+      clearTimeout(this.playbackStartTimer);
+      clearTimeout(this.playbackRetryTimer);
+      clearTimeout(this.playbackBufferTimer);
+      clearTimeout(this.playbackResumeTimer);
+      this.playbackWatchdog = null;
+      this.playbackStartTimer = null;
+      this.playbackRetryTimer = null;
+      this.playbackBufferTimer = null;
+      this.playbackResumeTimer = null;
       var loading = document.getElementById('playerLoading');
       if (loading) loading.classList.add('hidden');
       var video = document.getElementById('video');
@@ -2680,10 +2847,23 @@
       if (!player) return;
       var old = player.querySelector('.player-error');
       if (old) old.remove();
+      var canRetry = Boolean(this.playerOpen && this.playbackCandidates && this.playbackCandidates.length);
+      this.playerErrorOpen = true;
+      this.playerErrorRetryAvailable = canRetry;
       var error = document.createElement('div');
       error.className = 'player-error';
-      error.innerHTML = '<div><h2>' + escapeHtml(title) + '</h2><p>' + escapeHtml(message) + '</p><p>Press BACK to return.</p></div>';
+      error.innerHTML = '<div><h2>' + escapeHtml(title) + '</h2><p>' + escapeHtml(message) + '</p>' +
+        (canRetry
+          ? '<p><button id="retryPlayback" class="primary-button" type="button">Retry</button></p><p>Press OK to retry or BACK to exit.</p>'
+          : '<p>Press BACK to return.</p>') +
+        '</div>';
       player.appendChild(error);
+      if (canRetry) {
+        var self = this;
+        var retry = document.getElementById('retryPlayback');
+        retry.addEventListener('click', function () { self.retryPlayback(); });
+        retry.focus();
+      }
     },
 
     showOverlay: function (keepOpen) {
@@ -2707,9 +2887,12 @@
     closePlayer: function () {
       clearTimeout(this.overlayTimer);
       clearTimeout(this.playbackWatchdog);
+      clearTimeout(this.playbackStartTimer);
       clearTimeout(this.playbackBufferTimer);
       clearTimeout(this.playbackResumeTimer);
       clearTimeout(this.playbackRetryTimer);
+      this.playbackWatchdog = null;
+      this.playbackStartTimer = null;
       this.playbackBufferTimer = null;
       this.playbackResumeTimer = null;
       this.playbackRetryTimer = null;
@@ -2717,8 +2900,9 @@
       if (video) {
         if (this.playerType !== 'live' && isFinite(video.currentTime) &&
             (this.playbackProgressRestored || !(Number(this.playbackResumeTarget || 0) > 30))) {
-          XtreamlyTVStore.saveProgress(this.playerType, idOf(this.playerMedia, this.playerType), video.currentTime, video.duration);
+          OvelaStore.saveProgress(this.playerType, idOf(this.playerMedia, this.playerType), video.currentTime, video.duration);
         }
+        OvelaStore.flush();
         try { video.pause(); video.removeAttribute('src'); video.load(); } catch (error) { /* ignore */ }
       }
       var player = document.getElementById('player');
@@ -2739,9 +2923,11 @@
       this.playerParent = null;
       this.playbackCandidates = [];
       this.playbackCandidateRetries = {};
+      this.playerErrorOpen = false;
+      this.playerErrorRetryAvailable = false;
       this.playerHasPlayed = false;
       this.lastPlaybackToggleAt = 0;
-      this.state = XtreamlyTVStore.getState();
+      this.state = OvelaStore.getState();
       var returnState = this.playerReturnState;
       this.playerReturnState = null;
       if (returnState && document.querySelector('.shell')) {
@@ -2769,10 +2955,12 @@
       this.playbackCandidates = this.buildPlaybackCandidates(next, 'live');
       this.playbackCandidateIndex = 0;
       this.playbackCandidateRetries = {};
+      this.playerErrorOpen = false;
+      this.playerErrorRetryAvailable = false;
       clearTimeout(this.playbackRetryTimer);
       this.playbackRetryTimer = null;
       this.playbackProgressRestored = false;
-      XtreamlyTVStore.addRecent(next, 'live');
+      OvelaStore.addRecent(next, 'live');
       var title = document.getElementById('playerTitle');
       var program = document.getElementById('playerProgram');
       var description = document.getElementById('playerDescription');
@@ -2827,22 +3015,45 @@
       if (!this.playerMedia) return;
       var target = this.playerType === 'episode' && this.playerParent ? this.playerParent : this.playerMedia;
       var type = this.playerType === 'episode' && this.playerParent ? 'series' : this.playerType;
-      var added = XtreamlyTVStore.toggleFavorite(target, type);
-      this.state = XtreamlyTVStore.getState();
+      var added = OvelaStore.toggleFavorite(target, type);
+      this.state = OvelaStore.getState();
       this.toast(added ? 'Added to favorites' : 'Removed from favorites');
       this.showOverlay();
     },
 
     onGlobalKey: function (event) {
       if (this.playerOpen) {
+        if (this.playerErrorOpen) {
+          if (event.keyCode === BACK || event.keyCode === STOP) { event.preventDefault(); this.closePlayer(); }
+          else if (event.keyCode === 13) {
+            event.preventDefault();
+            if (this.playerErrorRetryAvailable) this.retryPlayback();
+          }
+          return;
+        }
         if (event.keyCode === BACK || event.keyCode === STOP) { event.preventDefault(); this.closePlayer(); }
         else if (event.keyCode === 38 && this.playerType === 'live') { event.preventDefault(); this.changeChannel(-1); }
         else if (event.keyCode === 40 && this.playerType === 'live') { event.preventDefault(); this.changeChannel(1); }
         else if (event.keyCode === 37) { event.preventDefault(); this.seek(-30); }
         else if (event.keyCode === 39) { event.preventDefault(); this.seek(30); }
-        else if (event.keyCode === 13) { event.preventDefault(); this.togglePlayback(); }
-        else if (event.keyCode === PLAY) { event.preventDefault(); var playVideo = document.getElementById('video'); if (playVideo) { try { playVideo.play(); } catch (playError) { /* ignore */ } this.updateTransportState(playVideo); } this.showOverlay(); }
-        else if (event.keyCode === PAUSE) { event.preventDefault(); var pauseVideo = document.getElementById('video'); if (pauseVideo) { try { pauseVideo.pause(); } catch (pauseError) { /* ignore */ } this.updateTransportState(pauseVideo); } this.showOverlay(true); }
+        else if (event.keyCode === 13) {
+          event.preventDefault();
+          if (this.playerType === 'live') this.showOverlay();
+          else this.togglePlayback();
+        }
+        else if (event.keyCode === PLAY) {
+          event.preventDefault();
+          if (this.playerType === 'live') { this.showOverlay(); return; }
+          var playVideo = document.getElementById('video');
+          if (playVideo) { try { playVideo.play(); } catch (playError) { /* ignore */ } this.updateTransportState(playVideo); }
+          this.showOverlay();
+        }
+        else if (event.keyCode === PAUSE) {
+          event.preventDefault();
+          if (this.playerType === 'live') { this.showOverlay(); return; }
+          var pauseVideo = document.getElementById('video');
+          if (pauseVideo) { try { pauseVideo.pause(); } catch (pauseError) { /* ignore */ } this.updateTransportState(pauseVideo); this.showOverlay(true); }
+        }
         else if (event.keyCode === GREEN && this.playerType === 'live') { event.preventDefault(); this.goToLive(); }
         else if (event.keyCode === RED) { event.preventDefault(); this.toggleCurrentFavorite(); }
         return;
@@ -2870,6 +3081,21 @@
         else if (this.currentView === 'favorites' && this.favoriteMode === 'group') {
           this.openFavoriteGroup('all');
         }
+        else if (this.currentView === 'settings') {
+          /* Back inside the provider editor cancels the edit. Without this the
+             viewer was thrown to Home mid-edit, losing the page they were on. */
+          var providerEditor = document.getElementById('providerEditor');
+          if (providerEditor && !providerEditor.hidden) {
+            providerEditor.hidden = true;
+            if (window.OvelaNavigation) {
+              OvelaNavigation.invalidate();
+              OvelaNavigation.focusFirst('#editProvider');
+            }
+          } else {
+            this.rememberNavigationState();
+            this.renderShell('home', this.navigationStates.home || null);
+          }
+        }
         else if (this.currentView !== 'home' && document.querySelector('.shell')) { this.rememberNavigationState(); this.renderShell('home', this.navigationStates.home || null); }
         else if (this.state.credentials || this.demo) this.exitApp();
       }
@@ -2883,6 +3109,6 @@
     }
   };
 
-  window.XtreamlyTVApp = window.TVeeApp = App;
+  window.OvelaApp = window.TVeeApp = App;
   document.addEventListener('DOMContentLoaded', function () { App.init(); });
 }());

@@ -1,8 +1,8 @@
 (function () {
   'use strict';
 
-  var Core = window.XtreamlyCore;
-  if (!Core) throw new Error('XtreamlyCore must load before api.js');
+  var Core = window.OvelaCore;
+  if (!Core) throw new Error('OvelaCore must load before api.js');
 
   function readResponse(response) {
     if (!response.ok) {
@@ -138,7 +138,7 @@
       .catch(function (error) {
         if (error && error.name === 'AbortError') error.message = 'The provider took too long to respond.';
         else if (String(error && error.message).toLowerCase().indexOf('fetch') >= 0) {
-          error.message = 'The provider blocked the TV app request. Configure the optional XtreamlyTV API Bridge in Settings.';
+          error.message = 'The provider blocked the TV app request. Configure the optional Ovela API Bridge in Settings.';
         }
         throw error;
       });
@@ -388,8 +388,8 @@
   };
 
   XtreamApi.M3uApi = M3uApi;
-  window.XtreamlyTVM3uApi = M3uApi;
+  window.OvelaM3uApi = M3uApi;
   XtreamApi.normalizeCollection = Core.normalizeCollection;
   XtreamApi.deriveCategories = Core.deriveCategories;
-  window.XtreamlyTVApi = window.TVeeApi = XtreamApi;
+  window.OvelaApi = window.TVeeApi = XtreamApi;
 }());

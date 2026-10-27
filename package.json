@@ -1,19 +1,20 @@
 {
-  "name": "xtreamlytv",
-  "version": "0.7.0",
+  "name": "ovela",
+  "version": "1.0.0",
   "private": true,
-  "description": "Open-source Xtream-compatible IPTV client for living-room TV platforms.",
-  "license": "MIT",
+  "description": "Open-source IPTV client for living-room TV platforms.",
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
     "sync:core": "node scripts/sync-web-core.mjs",
+    "classify": "node scripts/generate-category-classification.mjs",
     "tokens": "node scripts/generate-tokens.mjs",
-    "prepare:apps": "npm run sync:core && npm run tokens",
+    "prepare:apps": "npm run classify && npm run sync:core && npm run tokens",
     "check:webos": "node scripts/check-webos.mjs",
     "test:core": "node --test packages/core-web/test/*.test.mjs",
-    "test:webos": "python3 apps/webos/tests/browser_smoke.py && python3 apps/webos/tests/v07_release_smoke.py && python3 apps/webos/tests/m3u_smoke.py",
+    "test:webos": "for test_file in apps/webos/tests/*_smoke.py; do python3 \"$test_file\" || exit 1; done",
     "build:webos": "node scripts/build-webos.mjs",
     "build:android": "node scripts/build-android.mjs",
     "build": "npm run prepare:apps && npm run check:webos && npm run test:core && npm run build:webos",

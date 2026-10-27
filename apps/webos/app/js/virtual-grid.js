@@ -193,7 +193,7 @@
       this.positionNode(element, index, itemWidth);
     }
     if (fragment.childNodes.length) this.inner.appendChild(fragment);
-    if (window.XtreamlyTVNavigation && window.XtreamlyTVNavigation.invalidate) window.XtreamlyTVNavigation.invalidate();
+    if (window.OvelaNavigation && window.OvelaNavigation.invalidate) window.OvelaNavigation.invalidate();
   };
 
   VirtualGrid.prototype.handleClick = function (event) {
@@ -286,5 +286,5 @@
     this.nodes = {};
   };
 
-  window.XtreamlyTVVirtualGrid = VirtualGrid;
+  window.OvelaVirtualGrid = VirtualGrid;
 }());

@@ -4,4 +4,4 @@ useDefault = true
 [[allowlists]]
 description = "Public browser local-storage namespace, not an API credential"
 regexTarget = "match"
-regexes = ["navigationStorageKey: 'xtreamlytv\\.navigation\\.v1'"]
+regexes = ["navigationStorageKey: 'io.github.speyll.ovela.navigation.v1'"]

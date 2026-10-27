@@ -48,23 +48,23 @@ def main() -> None:
         page = browser.new_page(viewport={"width": 1920, "height": 1080})
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.set_content(inline_app(), wait_until="domcontentloaded")
-        page.evaluate("XtreamlyTVApp.startDemo()")
+        page.evaluate("OvelaApp.startDemo()")
 
         # Populate each history type and Favorites.
         page.evaluate("""() => {
-            XtreamlyTVStore.clearHistory();
-            XtreamlyTVMock.liveStreams.slice(0, 5).forEach(item => XtreamlyTVStore.addRecent(item, 'live'));
-            XtreamlyTVMock.vodStreams.slice(0, 5).forEach(item => XtreamlyTVStore.addRecent(item, 'movie'));
-            XtreamlyTVMock.series.slice(0, 5).forEach(item => XtreamlyTVStore.addRecent(item, 'series'));
-            XtreamlyTVMock.liveStreams.slice(0, 3).forEach(item => {
-                if (!XtreamlyTVStore.isFavorite('live', item.stream_id)) XtreamlyTVStore.toggleFavorite(item, 'live');
+            OvelaStore.clearHistory();
+            OvelaMock.liveStreams.slice(0, 5).forEach(item => OvelaStore.addRecent(item, 'live'));
+            OvelaMock.vodStreams.slice(0, 5).forEach(item => OvelaStore.addRecent(item, 'movie'));
+            OvelaMock.series.slice(0, 5).forEach(item => OvelaStore.addRecent(item, 'series'));
+            OvelaMock.liveStreams.slice(0, 3).forEach(item => {
+                if (!OvelaStore.isFavorite('live', item.stream_id)) OvelaStore.toggleFavorite(item, 'live');
             });
-            XtreamlyTVMock.vodStreams.slice(0, 2).forEach(item => {
-                if (!XtreamlyTVStore.isFavorite('movie', item.stream_id)) XtreamlyTVStore.toggleFavorite(item, 'movie');
+            OvelaMock.vodStreams.slice(0, 2).forEach(item => {
+                if (!OvelaStore.isFavorite('movie', item.stream_id)) OvelaStore.toggleFavorite(item, 'movie');
             });
-            XtreamlyTVApp.state = XtreamlyTVStore.getState();
-            XtreamlyTVApp.currentView = 'home';
-            XtreamlyTVApp.renderView();
+            OvelaApp.state = OvelaStore.getState();
+            OvelaApp.currentView = 'home';
+            OvelaApp.renderView();
         }""")
         page.wait_for_selector(".hero")
 

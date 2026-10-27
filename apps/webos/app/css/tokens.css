@@ -1,15 +1,23 @@
-/* Generated from packages/design-tokens/tokens.json. */
+/* Generated from packages/design-tokens/tokens.json. Do not edit by hand. */
 :root {
-  --brand-accent: #20e7c4;
-  --brand-accent-secondary: #2aa7ff;
-  --brand-background: #071014;
-  --brand-surface: #0d2230;
-  --brand-text: #f4f8ff;
-  --brand-muted: #a9bcc8;
-  --brand-danger: #ff5a7d;
+  --brand-accent: #E8E2D6;
+  --brand-accent-secondary: #A8A296;
+  --brand-background: #0C0C0E;
+  --brand-surface: #17171A;
+  --brand-text: #F4F1EA;
+  --brand-muted: #9A958C;
+  --brand-danger: #D9737E;
+  --brand-background-rgb: 12, 12, 14;
+  --brand-surface-rgb: 23, 23, 26;
+  --brand-accent-rgb: 232, 226, 214;
+  --brand-accent-2-rgb: 168, 162, 150;
+  --brand-bg-2: #111113;
+  --brand-bg-3: #0B0B0D;
+  --brand-panel-strong: #212124;
+  --brand-accent-ink: #19191A;
   --safe-inset: 48px;
-  --card-radius: 20px;
-  --focus-ring: 4px;
-  --sidebar-width: 296px;
-  --focus-duration: 55ms;
+  --card-radius: 16px;
+  --focus-ring: 3px;
+  --sidebar-width: 304px;
+  --focus-duration: 48ms;
 }

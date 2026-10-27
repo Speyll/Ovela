@@ -1,0 +1,672 @@
+/* Ovela brand layer.
+   Loaded after the layout stylesheets so the product identity is expressed in
+   one auditable place instead of being scattered through 6k lines of layout
+   CSS. Layout, navigation and focus behaviour are untouched.
+
+   Palette: graphite surfaces, ivory type, and one quiet ivory accent so the
+   artwork, not the chrome, carries the colour.
+   The retired blue/teal/purple/pink skins resolve onto this palette so a saved
+   preference from an older build still renders an on-brand interface. */
+
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/inter/Inter-Regular.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/inter/Inter-Medium.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/inter/Inter-SemiBold.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/inter/Inter-Bold.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root,
+body[data-theme],
+body[data-theme="blue"],
+body[data-theme="teal"],
+body[data-theme="purple"],
+body[data-theme="pink"] {
+  /* Sourced from the generated token sheet, so adapting the palette means
+     editing packages/design-tokens/tokens.json once, not this file. */
+  --bg: var(--brand-background);
+  --bg-2: var(--brand-bg-2);
+  --bg-3: var(--brand-bg-3);
+  --panel: var(--brand-surface);
+  --panel-rgb: var(--brand-surface-rgb);
+  --panel-strong: var(--brand-panel-strong);
+  --text: var(--brand-text);
+  --muted: var(--brand-muted);
+  --accent: var(--brand-accent);
+  --accent-2: var(--brand-accent-secondary);
+  --accent-rgb: var(--brand-accent-rgb);
+  --accent-ink: var(--brand-accent-ink);
+  --glow: rgba(var(--brand-accent-rgb), .16);
+  --danger: var(--brand-danger);
+  --focus: 0 0 0 3px rgba(245, 241, 232, .96), 0 14px 34px rgba(0, 0, 0, .55);
+}
+
+/* Ovela Noir: the monochrome companion skin. */
+body[data-theme="gray"] {
+  --bg: #0e0e10;
+  --bg-2: #141416;
+  --bg-3: #0a0a0c;
+  --panel: #1a1a1e;
+  --panel-rgb: 26, 26, 30;
+  --panel-strong: #24242a;
+  --text: #f7f5f0;
+  --muted: #a6a29a;
+  --accent: #c3c8cf;
+  --accent-2: #9ba1a9;
+  --accent-rgb: 195, 200, 207;
+  --accent-ink: #101215;
+  --glow: rgba(195, 200, 207, .12);
+  --focus: 0 0 0 3px rgba(247, 245, 240, .96), 0 14px 34px rgba(0, 0, 0, .55);
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: 'Inter', 'Arimo', Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The wordmark carries the brand; let it breathe slightly tighter than body
+   copy so the interface reads as editorial rather than as a scaled phone UI. */
+.ovela-lockup .ovela-word {
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: var(--text) !important;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ovela-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+}
+
+/* The mark: source-extracted O mark from the brand pack. Uses the supplied
+   flat SVG so it stays sharp at any scale and matches the approved artwork. */
+.ovela-mark {
+  display: inline-block !important;
+  flex: none;
+  background-image: url('../assets/ovela-mark-flat.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.ovela-mark::after {
+  display: none;
+}
+
+.logo .ovela-word { height: 20px; width: auto; }
+.player-brand .ovela-lockup { gap: 9px; }
+.player-brand .ovela-mark { width: 18px; height: 21px; }
+.player-brand .ovela-word { height: 17px; width: auto; }
+
+.login-brand .ovela-lockup { gap: 20px; }
+.login-brand .ovela-mark { width: 46px; height: 56px; }
+.login-brand .ovela-word { height: 46px; width: auto; }
+
+/* Focus: a warm white ring plus the accent edge. White stays legible over both
+   dark panels and bright key art, where a coloured ring alone can disappear. */
+body .v07-poster:focus,
+body .v07-channel-card:focus,
+body .nav-list a:focus,
+body .nav-list button:focus,
+body button:focus,
+body .focusable:focus {
+  outline: none;
+}
+
+body .v07-poster.is-focused,
+body .v07-poster:focus {
+  box-shadow: 0 0 0 3px rgba(245, 241, 232, .95), 0 16px 38px rgba(0, 0, 0, .55);
+}
+
+/* Quieter surfaces: the old skins leaned on saturated washes that fought with
+   provider artwork. */
+.sidebar,
+.bottom-bar,
+.player-controls {
+  backdrop-filter: none;
+}
+
+/* Keep artwork the loudest element on screen. */
+.v07-hero-plot,
+.hero-plot,
+.hero-description {
+  color: var(--muted);
+}
+
+/* Hero artwork stays. The full-bleed blur does not: webOS GPUs pay for that
+   filter on every frame, and a soft flat wash reads more considered anyway. */
+.v07-hero-backdrop {
+  filter: none !important;
+  opacity: .26 !important;
+  transform: none !important;
+  transition: none !important;
+}
+.v07-hero-scrim {
+  background: linear-gradient(
+    90deg,
+    rgba(12, 12, 14, .95) 0%,
+    rgba(12, 12, 14, .80) 46%,
+    rgba(12, 12, 14, .38) 100%
+  ) !important;
+}
+
+/* ==========================================================================
+   Ovela content-first Home
+   No featured hero, backdrop or promotional panel: recent activity, genuine
+   collections and the four browse destinations are the whole page.
+   ========================================================================== */
+.ovela-home .v07-home-scroll {
+  padding-top: 18px !important;
+  padding-right: 18px !important;
+}
+.ovela-home .v07-home-row-section {
+  margin-top: 0 !important;
+  margin-bottom: 26px !important;
+}
+.ovela-home .section-head {
+  margin-bottom: 12px;
+}
+.ovela-home .section h2 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -.2px;
+}
+.ovela-home .section-meta {
+  font-size: 13px;
+}
+.ovela-home .poster-row,
+.ovela-home .mixed-row {
+  gap: 14px;
+  padding: 4px 6px 6px 4px;
+}
+.ovela-home .poster-card {
+  flex-basis: 184px;
+  /* 230px artwork + 79px copy: the old 292px clipped the type label and the
+     focus ring through the last line of text. */
+  height: 309px;
+}
+.ovela-home .poster-art {
+  height: 230px;
+}
+.ovela-home .shortcut-row {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.ovela-home .shortcut-card {
+  min-height: 92px;
+}
+.ovela-home .channel-card {
+  flex-basis: 260px;
+}
+.ovela-home-empty {
+  max-width: 760px;
+  margin: 6px 4px 28px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+/* ==========================================================================
+   Ovela catalog
+   A readable vertical category rail and one flat channel column. Provider
+   artwork and titles carry the hierarchy; the chrome stays quiet.
+   ========================================================================== */
+.ovela-catalog {
+  grid-template-columns: 320px minmax(0, 1fr) !important;
+  gap: 26px !important;
+}
+.ovela-category-list {
+  border-radius: 18px !important;
+  padding: 12px 10px !important;
+  background: rgba(var(--panel-rgb), .52) !important;
+  /* A real scroll container: D-pad focus and the Magic Remote pointer's wheel
+     both move the same list, and every provider category stays reachable. */
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scroll-padding-block: 18px;
+  scrollbar-width: none;
+}
+.ovela-category-list::-webkit-scrollbar { display: none; }
+.ovela-category-list .category-button {
+  flex: 0 0 auto;
+  min-height: 70px;
+  border-radius: 13px;
+  padding: 11px 15px;
+  margin: 0;
+  color: rgba(244, 241, 234, .82);
+  /* Scales with the TV canvas, but never below a living-room-readable size. */
+  font-size: clamp(24px, 1.4vw, 28px);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -.2px;
+  white-space: normal;
+  overflow: hidden;
+}
+.ovela-category-list .category-label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+}
+.ovela-category-list .category-button small {
+  margin-top: 4px;
+  color: currentColor;
+  font-size: clamp(13px, .72vw, 15px);
+  line-height: 1.25;
+  opacity: .68;
+}
+.ovela-category-list .category-button.active {
+  background: rgba(var(--accent-rgb), .16);
+  box-shadow: inset 3px 0 0 rgba(var(--accent-rgb), .85);
+  color: var(--text);
+}
+.ovela-category-list .category-button:focus,
+.ovela-category-list .category-button.is-focused {
+  background: var(--text);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .22);
+  color: var(--accent-ink);
+}
+.ovela-category-list .category-button:focus small,
+.ovela-category-list .category-button.is-focused small {
+  color: var(--accent-ink);
+  opacity: .74;
+}
+.ovela-catalog-browser {
+  padding-right: 8px;
+}
+.ovela-catalog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 14px;
+}
+.ovela-catalog-head > div {
+  min-width: 0;
+}
+.ovela-catalog-head h2 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ovela-catalog-head .result-count {
+  display: block;
+  min-width: 0;
+  margin-top: 3px;
+  text-align: left;
+  font-size: 13px;
+}
+.ovela-catalog-search {
+  flex: 0 0 330px;
+  height: 48px;
+  border-radius: 13px;
+  font-size: 15px;
+}
+.ovela-catalog-grid {
+  padding-top: 2px;
+}
+.ovela-catalog .poster-grid {
+  grid-auto-rows: 326px;
+}
+.ovela-catalog .poster-grid .poster-card {
+  height: 326px;
+}
+.ovela-catalog .poster-grid .poster-art {
+  height: 244px;
+}
+
+/* Flat Live TV list: one channel per row, logo + name + number. */
+.channel-list .channel-tile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  padding: 0 18px;
+  border-radius: 12px;
+  background: rgba(var(--panel-rgb), .62);
+  border-color: rgba(255, 255, 255, .05);
+}
+.channel-list .channel-tile .channel-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+.channel-list .channel-tile .channel-logo,
+.channel-list .channel-tile .channel-logo-fallback {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  flex: none;
+}
+.channel-list .channel-tile .channel-tile-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+  flex: 1;
+}
+.channel-list .channel-tile .channel-name {
+  margin: 0;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+.channel-list .channel-tile .channel-number {
+  margin: 0 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: .06em;
+  flex: none;
+}
+.channel-list .channel-tile:focus,
+.channel-list .channel-tile.is-focused {
+  background: rgba(var(--accent-rgb), .16);
+  box-shadow: inset 0 0 0 2px rgba(245, 241, 232, .9);
+}
+
+/* ==========================================================================
+   Category manager (inline settings card)
+   ========================================================================== */
+.v07-category-manager {
+  grid-column: 1 / -1;
+  padding: 24px !important;
+}
+.v07-manager-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+.v07-manager-head h3 {
+  margin: 0 0 6px;
+}
+.v07-manager-head p {
+  margin: 0;
+  max-width: 760px;
+}
+.v07-manager-summary {
+  flex: none;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+  padding-top: 4px;
+}
+.v07-manager-tabs {
+  display: flex;
+  gap: 6px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+}
+.v07-manager-tab {
+  min-height: 44px;
+  padding: 0 15px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 600;
+}
+.v07-manager-tab span {
+  margin-left: 5px;
+  color: inherit;
+  opacity: .55;
+  font-size: 12px;
+}
+.v07-manager-tab.active {
+  background: rgba(var(--accent-rgb), .12);
+  border-color: rgba(var(--accent-rgb), .18);
+  color: var(--text);
+}
+.v07-manager-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+}
+.v07-manager-facet {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding-top: 10px;
+}
+.v07-manager-facet-label {
+  flex: 0 0 64px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.v07-manager-facet .v07-manager-groups {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+.v07-manager-groups {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px 0 2px;
+  scrollbar-width: none;
+}
+.v07-manager-groups::-webkit-scrollbar { display: none; }
+.v07-manager-group {
+  flex: none;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.v07-manager-group span {
+  margin-left: 6px;
+  color: inherit;
+  opacity: .6;
+  font-size: 12px;
+}
+.v07-manager-group.active {
+  background: rgba(var(--accent-rgb), .14);
+  border-color: rgba(var(--accent-rgb), .35);
+  color: var(--text);
+}
+.v07-manager-group:focus,
+.v07-manager-group.is-focused {
+  box-shadow: inset 0 0 0 2px rgba(245, 241, 232, .9);
+  color: var(--text);
+}
+.v07-manager-tools .search-box {
+  flex: 0 0 320px;
+  height: 46px;
+  border-radius: 11px;
+  font-size: 15px;
+}
+.v07-manager-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.v07-manager-actions .secondary-button {
+  min-height: 44px;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.v07-manager-actions .secondary-button.active {
+  background: rgba(var(--accent-rgb), .14);
+  color: var(--text);
+}
+.v07-category-rows {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 2px 6px 2px 2px;
+  scrollbar-width: none;
+  border-top: 1px solid rgba(255, 255, 255, .05);
+}
+.v07-category-rows::-webkit-scrollbar { display: none; }
+.v07-category-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 54px;
+  margin: 2px 0;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 15px;
+}
+.v07-category-row:hover {
+  background: rgba(255, 255, 255, .04);
+}
+.v07-category-row.is-hidden {
+  color: var(--muted);
+}
+.v07-category-check {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 5px;
+  color: var(--accent-ink);
+  background: transparent;
+  font-size: 13px;
+  line-height: 1;
+}
+.v07-category-row.is-hidden .v07-category-check {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.v07-category-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+.v07-category-title,
+.v07-category-meta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.v07-category-meta {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.v07-category-state {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.v07-category-row:focus,
+.v07-category-row.is-focused {
+  background: rgba(var(--accent-rgb), .14);
+  box-shadow: inset 0 0 0 2px rgba(245, 241, 232, .9);
+}
+.v07-manager-empty {
+  padding: 22px 4px;
+  color: var(--muted);
+  font-size: 15px;
+}
+.v07-manager-footer {
+  margin-top: 12px;
+}
+.v07-manager-changebar,
+.v07-manager-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, .06);
+}
+.v07-manager-change {
+  flex: 1;
+  color: var(--muted);
+  font-size: 14px;
+}
+.v07-manager-changebar .primary-button,
+.v07-manager-changebar .secondary-button,
+.v07-manager-confirm .primary-button,
+.v07-manager-confirm .secondary-button,
+.v07-manager-status .secondary-button {
+  min-height: 44px;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.v07-manager-confirm {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(var(--accent-rgb), .18);
+  border-radius: 12px;
+  background: rgba(var(--accent-rgb), .07);
+}
+.v07-manager-confirm strong { font-size: 15px; }
+.v07-manager-confirm span { color: var(--muted); font-size: 13px; }
+.v07-manager-confirm > div { display: flex; gap: 8px; margin-top: 4px; }
+.v07-manager-status {
+  color: var(--muted);
+  font-size: 14px;
+}
+.v07-manager-status span { flex: 1; }

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Merge these items into the app theme used by the launch Activity. -->
+    <style name="OvelaSplashItems">
+        <item name="android:windowSplashScreenBackground">@color/ovela_deep_charcoal</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+    </style>
+</resources>

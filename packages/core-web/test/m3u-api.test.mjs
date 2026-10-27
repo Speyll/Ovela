@@ -13,7 +13,7 @@ function createApi(fetch) {
   vm.createContext(context);
   vm.runInContext(readFileSync(resolve('packages/core-web/src/core.js'), 'utf8'), context);
   vm.runInContext(readFileSync(resolve('packages/core-web/src/api.js'), 'utf8'), context);
-  return new context.XtreamlyTVM3uApi({ sourceType: 'm3u', playlistUrl: 'https://provider.test/list.m3u' }, {});
+  return new context.OvelaM3uApi({ sourceType: 'm3u', playlistUrl: 'https://provider.test/list.m3u' }, {});
 }
 
 test('loads and normalizes M3U catalogs without Xtream actions', async () => {

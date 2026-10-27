@@ -21,7 +21,7 @@ Configure the bridge in webOS Settings as:
 http://YOUR_LAN_HOST:8787
 ```
 
-Enter the same bridge token in XtreamlyTV Settings. Requests without the token,
+Enter the same bridge token in Ovela Settings. Requests without the token,
 from an unlisted browser origin, or to an unlisted provider or playlist are rejected.
 Playlist tokens are configuration secrets; rotate the bridge configuration when
 a playlist URL changes.

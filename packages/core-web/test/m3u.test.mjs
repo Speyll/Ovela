@@ -57,3 +57,9 @@ test('recovery is bounded and prefers another candidate before repeating', () =>
   assert.equal(core.recoveryDecision({ candidateIndex: 0, candidateCount: 1, attempts: 0 }, { kind: 'transient' }).action, 'retry');
   assert.equal(core.recoveryDecision({ candidateIndex: 0, candidateCount: 1, attempts: 2, maxAttempts: 2 }, { kind: 'transient' }).action, 'fail');
 });
+
+test('recovery can retry the current candidate before advancing', () => {
+  const state = { candidateIndex: 0, candidateCount: 2, attempts: 0, maxAttempts: 1, retryBeforeNext: true };
+  assert.equal(core.recoveryDecision(state, { kind: 'transient' }).action, 'retry');
+  assert.equal(core.recoveryDecision({ ...state, attempts: 1 }, { kind: 'transient' }).action, 'next');
+});

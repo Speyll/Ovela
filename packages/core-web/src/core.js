@@ -2,9 +2,1151 @@
   'use strict';
   var api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
-  root.XtreamlyCore = api;
+  root.OvelaCore = api;
 }(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
+
+  // BEGIN GENERATED CATEGORY CLASSIFICATION
+  var CATEGORY_CLASSIFICATION_RULES = {
+    "version": 1,
+    "languages": [
+      {
+        "key": "ar",
+        "label": "Arabic",
+        "aliases": [
+          "ar",
+          "arab",
+          "arabic",
+          "arabe",
+          "arabisch",
+          "arabiya"
+        ]
+      },
+      {
+        "key": "en",
+        "label": "English",
+        "aliases": [
+          "en",
+          "eng",
+          "english",
+          "anglais",
+          "ingles",
+          "england",
+          "britain",
+          "british",
+          "uk",
+          "gb"
+        ]
+      },
+      {
+        "key": "fr",
+        "label": "French",
+        "aliases": [
+          "fr",
+          "french",
+          "francais",
+          "francophone",
+          "france"
+        ]
+      },
+      {
+        "key": "es",
+        "label": "Spanish",
+        "aliases": [
+          "es",
+          "spanish",
+          "espanol",
+          "espana",
+          "castellano",
+          "latino",
+          "spain"
+        ]
+      },
+      {
+        "key": "de",
+        "label": "German",
+        "aliases": [
+          "de",
+          "german",
+          "deutsch",
+          "deutschland",
+          "germany"
+        ]
+      },
+      {
+        "key": "it",
+        "label": "Italian",
+        "aliases": [
+          "it",
+          "italian",
+          "italiano",
+          "italia",
+          "italy"
+        ]
+      },
+      {
+        "key": "pt",
+        "label": "Portuguese",
+        "aliases": [
+          "pt",
+          "portuguese",
+          "portugues",
+          "portugal",
+          "brasileiro",
+          "brasil",
+          "brazil"
+        ]
+      },
+      {
+        "key": "tr",
+        "label": "Turkish",
+        "aliases": [
+          "tr",
+          "turkish",
+          "turkce",
+          "turkiye",
+          "turk",
+          "turkey"
+        ]
+      },
+      {
+        "key": "ru",
+        "label": "Russian",
+        "aliases": [
+          "ru",
+          "russian",
+          "russkiy",
+          "russkij",
+          "rossiya",
+          "russia"
+        ]
+      },
+      {
+        "key": "pl",
+        "label": "Polish",
+        "aliases": [
+          "pl",
+          "polish",
+          "polski",
+          "polska",
+          "poland"
+        ]
+      },
+      {
+        "key": "nl",
+        "label": "Dutch",
+        "aliases": [
+          "nl",
+          "dutch",
+          "nederlands",
+          "nederland",
+          "holland",
+          "netherlands"
+        ]
+      },
+      {
+        "key": "ro",
+        "label": "Romanian",
+        "aliases": [
+          "ro",
+          "romanian",
+          "romana",
+          "romania"
+        ]
+      },
+      {
+        "key": "sq",
+        "label": "Albanian",
+        "aliases": [
+          "al",
+          "albanian",
+          "shqip",
+          "shqiptar",
+          "albania"
+        ]
+      },
+      {
+        "key": "el",
+        "label": "Greek",
+        "aliases": [
+          "gr",
+          "greek",
+          "ellinika",
+          "hellenic",
+          "greece"
+        ]
+      },
+      {
+        "key": "sv",
+        "label": "Swedish",
+        "aliases": [
+          "se",
+          "swedish",
+          "svenska",
+          "sverige",
+          "sweden"
+        ]
+      },
+      {
+        "key": "no",
+        "label": "Norwegian",
+        "aliases": [
+          "no",
+          "norwegian",
+          "norsk",
+          "norge",
+          "norway"
+        ]
+      },
+      {
+        "key": "da",
+        "label": "Danish",
+        "aliases": [
+          "dk",
+          "danish",
+          "dansk",
+          "danmark",
+          "denmark"
+        ]
+      },
+      {
+        "key": "fi",
+        "label": "Finnish",
+        "aliases": [
+          "fi",
+          "finnish",
+          "suomi",
+          "finland"
+        ]
+      },
+      {
+        "key": "cs",
+        "label": "Czech",
+        "aliases": [
+          "cz",
+          "czech",
+          "cesky",
+          "ceska",
+          "czechia"
+        ]
+      },
+      {
+        "key": "hu",
+        "label": "Hungarian",
+        "aliases": [
+          "hu",
+          "hungarian",
+          "magyar",
+          "hungary"
+        ]
+      },
+      {
+        "key": "bg",
+        "label": "Bulgarian",
+        "aliases": [
+          "bg",
+          "bulgarian",
+          "balgarski",
+          "bulgaria"
+        ]
+      },
+      {
+        "key": "hr",
+        "label": "Croatian",
+        "aliases": [
+          "hr",
+          "croatian",
+          "hrvatski",
+          "hrvatska",
+          "croatia"
+        ]
+      },
+      {
+        "key": "sr",
+        "label": "Serbian",
+        "aliases": [
+          "rs",
+          "serbian",
+          "srpski",
+          "srbija",
+          "serbia"
+        ]
+      },
+      {
+        "key": "sk",
+        "label": "Slovak",
+        "aliases": [
+          "sk",
+          "slovak",
+          "slovensky",
+          "slovensko",
+          "slovakia"
+        ]
+      },
+      {
+        "key": "sl",
+        "label": "Slovenian",
+        "aliases": [
+          "si",
+          "slovenian",
+          "slovenski",
+          "slovenija",
+          "slovenia"
+        ]
+      },
+      {
+        "key": "uk",
+        "label": "Ukrainian",
+        "aliases": [
+          "ua",
+          "ukrainian",
+          "ukrainska",
+          "ukraina",
+          "ukraine"
+        ]
+      },
+      {
+        "key": "he",
+        "label": "Hebrew",
+        "aliases": [
+          "he",
+          "il",
+          "hebrew",
+          "ivrit",
+          "israel"
+        ]
+      },
+      {
+        "key": "hi",
+        "label": "Hindi",
+        "aliases": [
+          "hi",
+          "hindi"
+        ]
+      },
+      {
+        "key": "ur",
+        "label": "Urdu",
+        "aliases": [
+          "ur",
+          "urdu"
+        ]
+      },
+      {
+        "key": "fa",
+        "label": "Persian",
+        "aliases": [
+          "fa",
+          "persian",
+          "farsi",
+          "iran"
+        ]
+      },
+      {
+        "key": "ku",
+        "label": "Kurdish",
+        "aliases": [
+          "ku",
+          "kurdish",
+          "kurdi"
+        ]
+      },
+      {
+        "key": "tl",
+        "label": "Filipino",
+        "aliases": [
+          "tl",
+          "filipino",
+          "tagalog",
+          "philippines"
+        ]
+      },
+      {
+        "key": "vi",
+        "label": "Vietnamese",
+        "aliases": [
+          "vi",
+          "vietnamese",
+          "vietnam"
+        ]
+      },
+      {
+        "key": "id",
+        "label": "Indonesian",
+        "aliases": [
+          "id",
+          "indonesian",
+          "indonesia"
+        ]
+      },
+      {
+        "key": "ms",
+        "label": "Malay",
+        "aliases": [
+          "ms",
+          "malay",
+          "malaysia"
+        ]
+      },
+      {
+        "key": "th",
+        "label": "Thai",
+        "aliases": [
+          "th",
+          "thai",
+          "thailand"
+        ]
+      },
+      {
+        "key": "ja",
+        "label": "Japanese",
+        "aliases": [
+          "ja",
+          "japanese",
+          "japan"
+        ]
+      },
+      {
+        "key": "ko",
+        "label": "Korean",
+        "aliases": [
+          "ko",
+          "korean",
+          "korea"
+        ]
+      },
+      {
+        "key": "zh",
+        "label": "Chinese",
+        "aliases": [
+          "zh",
+          "chinese",
+          "mandarin",
+          "cantonese",
+          "china"
+        ]
+      }
+    ],
+    "qualities": [
+      {
+        "key": "8k",
+        "label": "8K",
+        "rank": 50,
+        "aliases": [
+          "8k",
+          "4320p"
+        ]
+      },
+      {
+        "key": "4k",
+        "label": "4K",
+        "rank": 40,
+        "aliases": [
+          "4k",
+          "uhd",
+          "2160p",
+          "2160",
+          "ultra hd"
+        ]
+      },
+      {
+        "key": "fhd",
+        "label": "FHD",
+        "rank": 30,
+        "aliases": [
+          "fhd",
+          "full hd",
+          "fullhd",
+          "1080p",
+          "1080"
+        ]
+      },
+      {
+        "key": "hd",
+        "label": "HD",
+        "rank": 20,
+        "aliases": [
+          "hd",
+          "720p",
+          "720"
+        ]
+      },
+      {
+        "key": "sd",
+        "label": "SD",
+        "rank": 10,
+        "aliases": [
+          "sd",
+          "480p",
+          "480",
+          "360p"
+        ]
+      }
+    ],
+    "formats": [
+      {
+        "key": "hevc",
+        "label": "HEVC",
+        "aliases": [
+          "hevc",
+          "h265",
+          "h 265",
+          "x265"
+        ]
+      },
+      {
+        "key": "avc",
+        "label": "AVC",
+        "aliases": [
+          "avc",
+          "h264",
+          "h 264",
+          "x264"
+        ]
+      },
+      {
+        "key": "hdr",
+        "label": "HDR",
+        "aliases": [
+          "hdr",
+          "hdr10",
+          "dolby vision"
+        ]
+      }
+    ],
+    "regions": [
+      {
+        "key": "es",
+        "label": "Spain",
+        "aliases": [
+          "es",
+          "espana",
+          "spain",
+          "espagne"
+        ]
+      },
+      {
+        "key": "fr",
+        "label": "France",
+        "aliases": [
+          "fr",
+          "france",
+          "francia"
+        ]
+      },
+      {
+        "key": "gb",
+        "label": "United Kingdom",
+        "aliases": [
+          "uk",
+          "gb",
+          "united kingdom",
+          "england",
+          "britain"
+        ]
+      },
+      {
+        "key": "us",
+        "label": "United States",
+        "aliases": [
+          "us",
+          "usa",
+          "united states",
+          "america",
+          "american"
+        ]
+      },
+      {
+        "key": "de",
+        "label": "Germany",
+        "aliases": [
+          "de",
+          "germany",
+          "deutschland"
+        ]
+      },
+      {
+        "key": "it",
+        "label": "Italy",
+        "aliases": [
+          "it",
+          "italy",
+          "italia"
+        ]
+      },
+      {
+        "key": "pt",
+        "label": "Portugal",
+        "aliases": [
+          "pt",
+          "portugal"
+        ]
+      },
+      {
+        "key": "tr",
+        "label": "Turkey",
+        "aliases": [
+          "tr",
+          "turkey",
+          "turkiye"
+        ]
+      },
+      {
+        "key": "pl",
+        "label": "Poland",
+        "aliases": [
+          "pl",
+          "poland",
+          "polska"
+        ]
+      },
+      {
+        "key": "ro",
+        "label": "Romania",
+        "aliases": [
+          "ro",
+          "romania"
+        ]
+      },
+      {
+        "key": "al",
+        "label": "Albania",
+        "aliases": [
+          "al",
+          "albania"
+        ]
+      },
+      {
+        "key": "gr",
+        "label": "Greece",
+        "aliases": [
+          "gr",
+          "greece",
+          "hellas"
+        ]
+      },
+      {
+        "key": "nl",
+        "label": "Netherlands",
+        "aliases": [
+          "nl",
+          "netherlands",
+          "holland",
+          "nederland"
+        ]
+      },
+      {
+        "key": "se",
+        "label": "Sweden",
+        "aliases": [
+          "se",
+          "sweden",
+          "sverige"
+        ]
+      },
+      {
+        "key": "no",
+        "label": "Norway",
+        "aliases": [
+          "no",
+          "norway",
+          "norge"
+        ]
+      },
+      {
+        "key": "dk",
+        "label": "Denmark",
+        "aliases": [
+          "dk",
+          "denmark",
+          "danmark"
+        ]
+      },
+      {
+        "key": "fi",
+        "label": "Finland",
+        "aliases": [
+          "fi",
+          "finland",
+          "suomi"
+        ]
+      },
+      {
+        "key": "cz",
+        "label": "Czechia",
+        "aliases": [
+          "cz",
+          "czechia",
+          "czech republic"
+        ]
+      },
+      {
+        "key": "hu",
+        "label": "Hungary",
+        "aliases": [
+          "hu",
+          "hungary",
+          "magyarorszag"
+        ]
+      },
+      {
+        "key": "bg",
+        "label": "Bulgaria",
+        "aliases": [
+          "bg",
+          "bulgaria"
+        ]
+      },
+      {
+        "key": "hr",
+        "label": "Croatia",
+        "aliases": [
+          "hr",
+          "croatia",
+          "hrvatska"
+        ]
+      },
+      {
+        "key": "rs",
+        "label": "Serbia",
+        "aliases": [
+          "rs",
+          "serbia",
+          "srbija"
+        ]
+      },
+      {
+        "key": "sk",
+        "label": "Slovakia",
+        "aliases": [
+          "sk",
+          "slovakia",
+          "slovensko"
+        ]
+      },
+      {
+        "key": "si",
+        "label": "Slovenia",
+        "aliases": [
+          "si",
+          "slovenia",
+          "slovenija"
+        ]
+      },
+      {
+        "key": "ua",
+        "label": "Ukraine",
+        "aliases": [
+          "ua",
+          "ukraine",
+          "ukraina"
+        ]
+      },
+      {
+        "key": "ru",
+        "label": "Russia",
+        "aliases": [
+          "ru",
+          "russia",
+          "rossiya"
+        ]
+      },
+      {
+        "key": "in",
+        "label": "India",
+        "aliases": [
+          "in",
+          "india"
+        ]
+      },
+      {
+        "key": "pk",
+        "label": "Pakistan",
+        "aliases": [
+          "pk",
+          "pakistan"
+        ]
+      },
+      {
+        "key": "ir",
+        "label": "Iran",
+        "aliases": [
+          "ir",
+          "iran"
+        ]
+      },
+      {
+        "key": "il",
+        "label": "Israel",
+        "aliases": [
+          "il",
+          "israel"
+        ]
+      },
+      {
+        "key": "ca",
+        "label": "Canada",
+        "aliases": [
+          "ca",
+          "canada"
+        ]
+      },
+      {
+        "key": "au",
+        "label": "Australia",
+        "aliases": [
+          "au",
+          "australia"
+        ]
+      },
+      {
+        "key": "mx",
+        "label": "Mexico",
+        "aliases": [
+          "mx",
+          "mexico"
+        ]
+      },
+      {
+        "key": "br",
+        "label": "Brazil",
+        "aliases": [
+          "br",
+          "brazil",
+          "brasil"
+        ]
+      },
+      {
+        "key": "ar",
+        "label": "Argentina",
+        "aliases": [
+          "argentina"
+        ]
+      },
+      {
+        "key": "mena",
+        "label": "MENA",
+        "aliases": [
+          "mena",
+          "middle east",
+          "arab world"
+        ]
+      },
+      {
+        "key": "balkans",
+        "label": "Balkans",
+        "aliases": [
+          "balkan",
+          "balkans",
+          "ex yu"
+        ]
+      },
+      {
+        "key": "nordic",
+        "label": "Nordic",
+        "aliases": [
+          "nordic"
+        ]
+      }
+    ],
+    "providers": [
+      {
+        "key": "vip",
+        "label": "VIP",
+        "aliases": [
+          "vip"
+        ]
+      },
+      {
+        "key": "osn",
+        "label": "OSN",
+        "aliases": [
+          "osn"
+        ]
+      },
+      {
+        "key": "mbc",
+        "label": "MBC",
+        "aliases": [
+          "mbc"
+        ]
+      },
+      {
+        "key": "netflix",
+        "label": "Netflix",
+        "aliases": [
+          "netflix"
+        ]
+      },
+      {
+        "key": "prime",
+        "label": "Prime Video",
+        "aliases": [
+          "prime",
+          "prime video",
+          "amazon"
+        ]
+      },
+      {
+        "key": "disney",
+        "label": "Disney+",
+        "aliases": [
+          "disney",
+          "disney plus"
+        ]
+      },
+      {
+        "key": "shahid",
+        "label": "Shahid",
+        "aliases": [
+          "shahid"
+        ]
+      },
+      {
+        "key": "bein",
+        "label": "beIN",
+        "aliases": [
+          "bein",
+          "bein sports"
+        ]
+      },
+      {
+        "key": "starzplay",
+        "label": "STARZPLAY",
+        "aliases": [
+          "starzplay",
+          "starz"
+        ]
+      },
+      {
+        "key": "appletv",
+        "label": "Apple TV",
+        "aliases": [
+          "apple tv"
+        ]
+      },
+      {
+        "key": "hbo",
+        "label": "HBO",
+        "aliases": [
+          "hbo"
+        ]
+      },
+      {
+        "key": "paramount",
+        "label": "Paramount+",
+        "aliases": [
+          "paramount"
+        ]
+      }
+    ]
+  };
+  // END GENERATED CATEGORY CLASSIFICATION
+
+  var CATEGORY_ALL_FACET = '__all__';
+  var CATEGORY_UNCLASSIFIED_FACET = '__none__';
+  var CATEGORY_OTHER_GROUP = '__other__';
+  // Two-letter language/region codes are useful on a provider prefix (`NO|`),
+  // but the same letters are ordinary English words. Only trust them when a
+  // `|` delimits them; full-word aliases remain available for bare names.
+  var CATEGORY_AMBIGUOUS_SHORT_ALIASES = {
+    no:1, it:1, in:1, id:1, hi:1, he:1, us:1, is:1, me:1, my:1,
+    am:1, an:1, as:1, at:1, be:1, by:1, do:1, go:1, if:1, of:1,
+    on:1, or:1, up:1, we:1
+  };
+  var classificationCache = Object.create(null);
+  var classificationCacheOrder = [];
+
+  function normalizeCategoryText(value) {
+    var text = String(value || '');
+    try { text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (_) { /* older runtime */ }
+    return text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+
+  function categoryTokens(value) {
+    var normalized = normalizeCategoryText(value);
+    return normalized ? normalized.split(' ') : [];
+  }
+
+  function categoryPrefix(name) {
+    var text = String(name || '').trim();
+    var separator = text.indexOf('|');
+    if (separator <= 0 || separator >= text.length - 1) return '';
+    if (!String(text.slice(separator + 1)).trim()) return '';
+    var prefix = text.slice(0, separator).trim();
+    if (!prefix || prefix.length > 16) return '';
+    if (/[\u0000-\u001f\u007f]/.test(prefix)) return '';
+    if (!/[0-9A-Za-z\u00c0-\uffff]/.test(prefix)) return '';
+    return prefix;
+  }
+
+  function matchesTokensAt(tokens, start, aliasTokens) {
+    if (!aliasTokens.length || start < 0 || start + aliasTokens.length > tokens.length) return false;
+    for (var index = 0; index < aliasTokens.length; index += 1) {
+      if (tokens[start + index] !== aliasTokens[index]) return false;
+    }
+    return true;
+  }
+
+  function collectRuleMatches(tokens, rules, atStart, allowAmbiguousShort) {
+    var found = Object.create(null);
+    (rules || []).forEach(function (rule, ruleIndex) {
+      (rule.aliases || []).forEach(function (alias) {
+        var aliasTokens = categoryTokens(alias);
+        if (!aliasTokens.length) return;
+        if (!allowAmbiguousShort && aliasTokens.length === 1 &&
+          aliasTokens[0].length <= 2 && CATEGORY_AMBIGUOUS_SHORT_ALIASES[aliasTokens[0]]) return;
+        var hit = false;
+        if (atStart) {
+          hit = matchesTokensAt(tokens, 0, aliasTokens);
+        } else {
+          for (var index = 0; index <= tokens.length - aliasTokens.length; index += 1) {
+            if (matchesTokensAt(tokens, index, aliasTokens)) { hit = true; break; }
+          }
+        }
+        if (!hit) return;
+        var previous = found[rule.key];
+        if (!previous || aliasTokens.length > previous.aliasTokens.length ||
+          (aliasTokens.length === previous.aliasTokens.length && ruleIndex < previous.ruleIndex)) {
+          found[rule.key] = { rule:rule, alias:alias, aliasTokens:aliasTokens, ruleIndex:ruleIndex };
+        }
+      });
+    });
+    return Object.keys(found).map(function (key) { return found[key]; }).sort(function (left, right) {
+      if (left.aliasTokens.length !== right.aliasTokens.length) return right.aliasTokens.length - left.aliasTokens.length;
+      return left.ruleIndex - right.ruleIndex;
+    });
+  }
+
+  function bestMatch(matches) {
+    return matches.length ? matches[0] : null;
+  }
+
+  function rawLeadingLabel(name, tokenCount) {
+    var words = String(name || '').trim().split(/\s+/).slice(0, tokenCount);
+    var label = words.join(' ').replace(/^[^0-9A-Za-z\u00c0-\uffff]+|[^0-9A-Za-z\u00c0-\uffff]+$/g, '').trim();
+    return label;
+  }
+
+  function classificationSummary(value) {
+    var labels = [];
+    if (value.language) labels.push(value.language.label);
+    if (value.quality) labels.push(value.quality.label);
+    (value.formats || []).forEach(function (format) {
+      if (labels.indexOf(format.label) < 0) labels.push(format.label);
+    });
+    if (value.provider) labels.push(value.provider.label);
+    if (value.region) labels.push(value.region.label);
+    if (value.ambiguousLanguage) labels.push('Multiple languages');
+    return labels.length ? labels.join(' \u00b7 ') : 'Unclassified';
+  }
+
+  function classifyCategory(name) {
+    var cacheKey = String(name || '');
+    if (Object.prototype.hasOwnProperty.call(classificationCache, cacheKey)) return classificationCache[cacheKey];
+    var prefix = categoryPrefix(cacheKey);
+    var allTokens = categoryTokens(cacheKey);
+    var prefixTokens = prefix ? categoryTokens(prefix) : null;
+    var languageMatches = collectRuleMatches(
+      prefixTokens || allTokens,
+      CATEGORY_CLASSIFICATION_RULES.languages,
+      false,
+      !!prefixTokens
+    );
+    var language = languageMatches.length === 1 ? languageMatches[0].rule : null;
+    var ambiguousLanguage = languageMatches.length > 1;
+    var qualityMatches = collectRuleMatches(allTokens, CATEGORY_CLASSIFICATION_RULES.qualities, false, !!prefixTokens);
+    qualityMatches.sort(function (left, right) {
+      return Number(right.rule.rank || 0) - Number(left.rule.rank || 0);
+    });
+    var quality = bestMatch(qualityMatches);
+    var formatMatches = collectRuleMatches(allTokens, CATEGORY_CLASSIFICATION_RULES.formats, false, !!prefixTokens);
+    var region = bestMatch(collectRuleMatches(prefixTokens || allTokens, CATEGORY_CLASSIFICATION_RULES.regions, false, !!prefixTokens));
+    var provider = bestMatch(collectRuleMatches(prefixTokens || allTokens, CATEGORY_CLASSIFICATION_RULES.providers, false, !!prefixTokens));
+    var leadingRules = CATEGORY_CLASSIFICATION_RULES.languages
+      .concat(CATEGORY_CLASSIFICATION_RULES.qualities)
+      .concat(CATEGORY_CLASSIFICATION_RULES.formats)
+      .concat(CATEGORY_CLASSIFICATION_RULES.regions)
+      .concat(CATEGORY_CLASSIFICATION_RULES.providers);
+    var leading = prefix ? null : bestMatch(collectRuleMatches(allTokens, leadingRules, true, false));
+    var groupLabel = prefix || (leading ? rawLeadingLabel(cacheKey, leading.aliasTokens.length) : '');
+    var groupKey = groupLabel ? groupLabel.toUpperCase() : CATEGORY_OTHER_GROUP;
+    var markers = [];
+    function marker(source, match) {
+      if (!match) return;
+      markers.push(source + ' ' + match.alias + ' \u2192 ' + match.rule.label);
+    }
+    if (prefixTokens) {
+      marker('prefix', languageMatches[0]);
+      marker('prefix', bestMatch(collectRuleMatches(prefixTokens, CATEGORY_CLASSIFICATION_RULES.qualities, false, true)));
+      marker('prefix', region);
+      marker('prefix', provider);
+    } else {
+      marker('name', languageMatches[0]);
+      marker('name', bestMatch(qualityMatches));
+      marker('name', provider);
+      marker('name', region);
+    }
+    formatMatches.forEach(function (match) { marker('name', match); });
+    if (ambiguousLanguage) {
+      markers.push('ambiguous languages: ' + languageMatches.map(function (match) { return match.rule.label; }).join(', '));
+    }
+    var value = {
+      prefix: prefix,
+      groupKey: groupKey,
+      groupLabel: groupLabel || 'Other',
+      language: language ? { key:language.key, label:language.label } : null,
+      quality: quality ? { key:quality.rule.key, label:quality.rule.label, rank:Number(quality.rule.rank || 0) } : null,
+      region: region ? { key:region.rule.key, label:region.rule.label } : null,
+      provider: provider ? { key:provider.rule.key, label:provider.rule.label } : null,
+      formats: formatMatches.map(function (match) { return { key:match.rule.key, label:match.rule.label }; }),
+      ambiguousLanguage: ambiguousLanguage,
+      markers: markers
+    };
+    value.summary = classificationSummary(value);
+    if (classificationCacheOrder.length >= 512) {
+      var oldest = classificationCacheOrder.shift();
+      if (oldest !== undefined) delete classificationCache[oldest];
+    }
+    classificationCache[cacheKey] = value;
+    classificationCacheOrder.push(cacheKey);
+    return value;
+  }
+
+  function categoryFacets(categories, dimension) {
+    var counts = Object.create(null);
+    var labels = Object.create(null);
+    var unclassified = 0;
+    (categories || []).forEach(function (category) {
+      var name = String(category && category.category_name || '');
+      var value = classifyCategory(name);
+      var selected = dimension === 'quality' ? value.quality : value.language;
+      if (!selected) { unclassified += 1; return; }
+      counts[selected.key] = (counts[selected.key] || 0) + 1;
+      labels[selected.key] = selected.label;
+    });
+    var rules = dimension === 'quality' ? CATEGORY_CLASSIFICATION_RULES.qualities : CATEGORY_CLASSIFICATION_RULES.languages;
+    var options = rules.filter(function (rule) { return counts[rule.key]; }).map(function (rule) {
+      return { key:rule.key, label:labels[rule.key] || rule.label, count:counts[rule.key], rank:Number(rule.rank || 0) };
+    });
+    options.sort(function (left, right) {
+      if (dimension === 'quality') return right.rank - left.rank;
+      return left.label < right.label ? -1 : (left.label > right.label ? 1 : 0);
+    });
+    if (unclassified) options.push({ key:CATEGORY_UNCLASSIFIED_FACET, label:'Unclassified', count:unclassified, rank:0 });
+    return options;
+  }
+
+  function categoryMatchesFacet(name, dimension, key) {
+    if (!key || key === CATEGORY_ALL_FACET) return true;
+    var value = classifyCategory(name);
+    var selected = dimension === 'quality' ? value.quality : value.language;
+    return key === CATEGORY_UNCLASSIFIED_FACET ? !selected : !!selected && selected.key === key;
+  }
+
+  function categoryClassificationCacheInfo() {
+    return { size: classificationCacheOrder.length, limit: 512 };
+  }
 
   function trimSlash(value) {
     return String(value || '').trim().replace(/\/+$/, '');
@@ -304,6 +1446,9 @@
     var candidateCount = Number(state.candidateCount || 0);
     var attempts = Number(state.attempts || 0);
     var maxAttempts = Math.max(1, Number(state.maxAttempts || 2));
+    if (!permanent && state.retryBeforeNext && attempts < maxAttempts) {
+      return { action: 'retry', reason: 'transient', delayMs: Math.min(250 * Math.pow(2, attempts), 2000) };
+    }
     if (candidateIndex + 1 < candidateCount) {
       return { action: 'next', reason: 'candidate', delayMs: permanent ? 0 : Math.min(250 * Math.pow(2, attempts), 2000) };
     }
@@ -349,6 +1494,15 @@
     m3uCategories: m3uCategories,
     rewriteM3uHost: rewriteM3uHost,
     m3uCandidates: m3uCandidates,
-    recoveryDecision: recoveryDecision
+    recoveryDecision: recoveryDecision,
+    normalizeCategoryText: normalizeCategoryText,
+    categoryPrefix: categoryPrefix,
+    classifyCategory: classifyCategory,
+    categoryFacets: categoryFacets,
+    categoryMatchesFacet: categoryMatchesFacet,
+    categoryClassificationCacheInfo: categoryClassificationCacheInfo,
+    CATEGORY_ALL_FACET: CATEGORY_ALL_FACET,
+    CATEGORY_UNCLASSIFIED_FACET: CATEGORY_UNCLASSIFIED_FACET,
+    CATEGORY_OTHER_GROUP: CATEGORY_OTHER_GROUP
   };
 }));

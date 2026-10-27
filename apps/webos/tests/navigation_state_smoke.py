@@ -54,14 +54,14 @@ def main() -> None:
         page = browser.new_page(viewport={"width": 1920, "height": 1080})
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.set_content(inline_app(), wait_until="domcontentloaded")
-        page.evaluate("XtreamlyTVApp.startDemo()")
+        page.evaluate("OvelaApp.startDemo()")
         page.wait_for_selector(".hero")
 
         # Returning from direct playback restores the exact catalog card.
         page.click('[data-view="live"]')
         page.click('[data-catalog-category="2"]')
         page.wait_for_selector("#catalogGrid .channel-tile")
-        page.evaluate("XtreamlyTVApp.virtualGrid.focusIndex(1)")
+        page.evaluate("OvelaApp.virtualGrid.focusIndex(1)")
         before_player = page.evaluate(
             """() => ({
                 id: document.activeElement.dataset.contentId,
@@ -71,7 +71,7 @@ def main() -> None:
         )
         page.keyboard.press("Enter")
         page.wait_for_selector("#player")
-        page.evaluate("XtreamlyTVApp.closePlayer()")
+        page.evaluate("OvelaApp.closePlayer()")
         page.wait_for_timeout(100)
         after_player = page.evaluate(
             """() => ({
@@ -88,14 +88,14 @@ def main() -> None:
         page.click('[data-view="movies"]')
         page.click('[data-catalog-category="102"]')
         page.wait_for_selector("#catalogGrid .poster-card")
-        page.evaluate("XtreamlyTVApp.virtualGrid.focusIndex(1)")
+        page.evaluate("OvelaApp.virtualGrid.focusIndex(1)")
         movie_id = page.evaluate("document.activeElement.dataset.contentId")
         page.keyboard.press("Enter")
         page.wait_for_selector("#closeDetail")
         page.click("#closeDetail")
         page.wait_for_timeout(150)
         assert page.evaluate("document.activeElement.dataset.contentId") == movie_id
-        assert page.evaluate("XtreamlyTVApp.activeCategory.movies") == "102"
+        assert page.evaluate("OvelaApp.activeCategory.movies") == "102"
 
         # Sidebar round trips restore the last card in each library.
         page.click('[data-view="settings"]')

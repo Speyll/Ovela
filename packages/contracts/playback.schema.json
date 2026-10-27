@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://xtreamlytv.github.io/contracts/playback.schema.json",
-  "title": "XtreamlyTV playback recovery decision",
+  "$id": "https://speyll.github.io/contracts/playback.schema.json",
+  "title": "Ovela playback recovery decision",
   "type": "object",
   "required": ["action"],
   "properties": {

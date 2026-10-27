@@ -1,25 +1,25 @@
 <resources>
-    <style name="Theme.XtreamlyTV" parent="android:style/Theme.Material.NoActionBar">
+    <style name="Theme.Ovela" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowDisablePreview">false</item>
         <item name="android:windowBackground">@drawable/launch_background</item>
-        <item name="android:colorAccent">#54B8FF</item>
-        <item name="android:colorPrimary">#54B8FF</item>
-        <item name="android:navigationBarColor">#02050A</item>
+        <item name="android:colorAccent">@color/ovela_ivory</item>
+        <item name="android:colorPrimary">@color/ovela_ivory</item>
+        <item name="android:navigationBarColor">@color/ovela_deep_charcoal</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowAllowReturnTransitionOverlap">true</item>
         <item name="android:windowAllowEnterTransitionOverlap">true</item>
     </style>
 
-    <style name="Theme.XtreamlyTV.Starting" parent="Theme.SplashScreen">
+    <style name="Theme.Ovela.Starting" parent="Theme.SplashScreen">
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowDisablePreview">false</item>
         <item name="android:windowBackground">@drawable/launch_background</item>
-        <item name="windowSplashScreenBackground">#02050A</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_empty</item>
-        <item name="postSplashScreenTheme">@style/Theme.XtreamlyTV</item>
+        <item name="windowSplashScreenBackground">@color/ovela_deep_charcoal</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Ovela</item>
     </style>
 </resources>

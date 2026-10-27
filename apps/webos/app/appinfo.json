@@ -1,15 +1,16 @@
 {
-  "id": "com.github.xtreamlytv.webos",
-  "version": "0.7.0",
+  "id": "io.github.speyll.ovela",
+  "version": "1.0.0",
   "requiredACG": [],
-  "vendor": "XtreamlyTV Contributors",
+  "vendor": "Ovela Contributors",
   "type": "web",
   "main": "index.html",
-  "title": "XtreamlyTV",
+  "title": "Ovela",
   "icon": "assets/icon.png",
   "largeIcon": "assets/largeIcon.png",
-  "splashBackground": "assets/splash.png",
   "resolution": "1920x1080",
   "transparent": false,
-  "disableBackHistoryAPI": true
+  "disableBackHistoryAPI": true,
+  "trustLevel": "default",
+  "testMode": "devTest"
 }

@@ -1,8 +1,8 @@
 {
-  "name": "xtreamlytv-api-bridge",
-  "version": "0.7.0",
+  "name": "ovela-api-bridge",
+  "version": "1.0.0",
   "private": true,
-  "description": "Optional local CORS bridge for the XtreamlyTV webOS Xtream client",
+  "description": "Optional local CORS bridge for the Ovela webOS Xtream client",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -11,5 +11,5 @@
   "engines": {
     "node": ">=18"
   },
-  "license": "MIT"
+  "license": "Apache-2.0"
 }

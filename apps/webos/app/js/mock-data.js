@@ -3,7 +3,7 @@
 
   var nowYear = new Date().getFullYear();
 
-  window.XtreamlyTVMock = window.TVeeMock = {
+  window.OvelaMock = window.TVeeMock = {
     profile: {
       user_info: { auth: 1, username: 'demo', status: 'Active', exp_date: '1893456000' },
       server_info: { url: 'demo.local', port: '443', https_port: '443', server_protocol: 'https' }
@@ -109,6 +109,6 @@
   };
 
   /* Backwards-compatible aliases used by early builds. */
-  window.XtreamlyTVMock.categories = window.TVeeMock.categories = window.XtreamlyTVMock.liveCategories = window.TVeeMock.liveCategories;
-  window.XtreamlyTVMock.streams = window.TVeeMock.streams = window.XtreamlyTVMock.liveStreams = window.TVeeMock.liveStreams;
+  window.OvelaMock.categories = window.TVeeMock.categories = window.OvelaMock.liveCategories = window.TVeeMock.liveCategories;
+  window.OvelaMock.streams = window.TVeeMock.streams = window.OvelaMock.liveStreams = window.TVeeMock.liveStreams;
 }());

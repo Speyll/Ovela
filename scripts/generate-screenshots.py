@@ -1,6 +1,6 @@
 """Generate the documentation screenshots from the production webOS UI.
 
-The capture uses XtreamlyTV's fictional, artwork-free demo catalog. This keeps
+The capture uses Ovela's fictional, artwork-free demo catalog. This keeps
 the published images reproducible and free of provider logos or media artwork.
 """
 
@@ -17,8 +17,8 @@ OUTPUT = ROOT / "docs" / "screenshots"
 
 
 def inline_app() -> str:
-    wordmark = base64.b64encode((APP / "assets" / "xtreamlytv-wordmark.svg").read_bytes()).decode("ascii")
-    wordmark_uri = "data:image/svg+xml;base64," + wordmark
+    wordmark = base64.b64encode((APP / "assets" / "ovela-wordmark.png").read_bytes()).decode("ascii")
+    wordmark_uri = "data:image/png;base64," + wordmark
     css = "\n".join(
         (APP / "css" / name).read_text(encoding="utf-8")
         for name in ("tokens.css", "app.css", "v0.7-ui.css")
@@ -37,7 +37,7 @@ def inline_app() -> str:
         "v0.7-ui.js",
     ):
         source = (APP / "js" / name).read_text(encoding="utf-8")
-        source = source.replace("assets/xtreamlytv-wordmark.svg", wordmark_uri)
+        source = source.replace("assets/ovela-wordmark.png", wordmark_uri)
         scripts.append("<script>" + source.replace("</script>", "<\\/script>") + "</script>")
     return (
         "<!doctype html><html><head><meta charset='utf-8'><base href='"
@@ -65,12 +65,12 @@ def main() -> None:
         page.route("http://**", lambda route: route.abort())
         page.route("https://**", lambda route: route.abort())
         page.set_content(inline_app(), wait_until="domcontentloaded")
-        page.evaluate("XtreamlyTVApp.startDemo()")
+        page.evaluate("OvelaApp.startDemo()")
         page.evaluate(
             """() => {
-                const app = XtreamlyTVApp;
-                const store = XtreamlyTVStore;
-                const mock = XtreamlyTVMock;
+                const app = OvelaApp;
+                const store = OvelaStore;
+                const mock = OvelaMock;
                 store.addRecent(mock.liveStreams[0], 'live');
                 store.addRecent(mock.vodStreams[0], 'movie');
                 store.addRecent(mock.series[0], 'series');
@@ -98,33 +98,33 @@ def main() -> None:
         )
 
         captures = (
-            ("xtreamlytv-home.png", "XtreamlyTVApp.renderShell('home')", ".v07-home"),
+            ("ovela-home.png", "OvelaApp.renderShell('home')", ".v07-home"),
             (
-                "xtreamlytv-live-virtualized.png",
-                "XtreamlyTVApp.activeCategory.live='2'; XtreamlyTVApp.renderShell('live')",
+                "ovela-live-virtualized.png",
+                "OvelaApp.activeCategory.live='2'; OvelaApp.renderShell('live')",
                 ".v07-guide",
             ),
             (
-                "xtreamlytv-movies.png",
-                "XtreamlyTVApp.activeCategory.movies='102'; XtreamlyTVApp.renderShell('movies')",
+                "ovela-movies.png",
+                "OvelaApp.activeCategory.movies='102'; OvelaApp.renderShell('movies')",
                 ".v07-media-stage",
             ),
             (
-                "xtreamlytv-favorites.png",
-                "XtreamlyTVApp.favoriteMode='home'; XtreamlyTVApp.favoriteGroupId='all'; "
-                "XtreamlyTVApp.renderShell('favorites')",
+                "ovela-favorites.png",
+                "OvelaApp.favoriteMode='home'; OvelaApp.favoriteGroupId='all'; "
+                "OvelaApp.renderShell('favorites')",
                 ".favorites-hub",
             ),
             (
-                "xtreamlytv-favorite-group.png",
+                "ovela-favorite-group.png",
                 """(() => {
-                    const group = XtreamlyTVStore.getState().favoriteGroups.find(item => item.name === 'Weekend Picks');
-                    XtreamlyTVApp.favoriteMode='group'; XtreamlyTVApp.favoriteGroupId=group.id;
-                    XtreamlyTVApp.renderShell('favorites');
+                    const group = OvelaStore.getState().favoriteGroups.find(item => item.name === 'Weekend Picks');
+                    OvelaApp.favoriteMode='group'; OvelaApp.favoriteGroupId=group.id;
+                    OvelaApp.renderShell('favorites');
                 })()""",
                 ".view",
             ),
-            ("xtreamlytv-skins.png", "XtreamlyTVApp.renderShell('settings')", ".view"),
+            ("ovela-skins.png", "OvelaApp.renderShell('settings')", ".view"),
         )
 
         for filename, action, selector in captures:

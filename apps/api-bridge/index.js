@@ -72,7 +72,7 @@ function validServer(value) {
 const server = http.createServer(async (req, res) => {
   cors(req, res);
   if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
-  if (req.method === 'GET' && req.url === '/health') return send(req, res, 200, { ok: true, service: 'xtreamlytv-api-bridge' });
+  if (req.method === 'GET' && req.url === '/health') return send(req, res, 200, { ok: true, service: 'ovela-api-bridge' });
   if (req.method !== 'POST' || !['/api/xtream', '/api/m3u'].includes(req.url)) return send(req, res, 404, { error: 'Not found' });
   if (!BRIDGE_TOKEN || req.headers.authorization !== `Bearer ${BRIDGE_TOKEN}`) {
     return send(req, res, 401, { error: 'Bridge authentication required' });
@@ -89,7 +89,7 @@ const server = http.createServer(async (req, res) => {
       let target = playlist;
       for (let hop = 0; hop <= 3; hop += 1) {
         const upstream = await fetch(target, {
-          headers: { 'User-Agent': 'XtreamlyTV-API-Bridge/0.7' },
+          headers: { 'User-Agent': 'Ovela-API-Bridge/0.7' },
           redirect: 'manual',
           signal: AbortSignal.timeout(45000)
         });
@@ -129,7 +129,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     const upstream = await fetch(target, {
-      headers: { 'User-Agent': 'XtreamlyTV-API-Bridge/0.7' },
+      headers: { 'User-Agent': 'Ovela-API-Bridge/0.7' },
       redirect: 'error',
       signal: AbortSignal.timeout(18000)
     });
@@ -147,5 +147,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`XtreamlyTV API Bridge listening on port ${PORT}`);
+  console.log(`Ovela API Bridge listening on port ${PORT}`);
 });

@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "XtreamlyTV-AndroidTV"
+rootProject.name = "Ovela-AndroidTV"
 include(":app")

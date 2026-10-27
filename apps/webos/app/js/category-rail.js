@@ -42,36 +42,53 @@
   };
 
   CategoryRail.prototype.render = function (focusAfter) {
-    var end = Math.min(this.items.length, this.start + this.maxVisible);
+    /* Render the full category list and let the rail own its scrolling. The
+       previous fixed-size window hid every category beyond the visible rows,
+       and the D-pad could never move a window that the document-level
+       navigation handler had already claimed. A scroll container keeps the
+       pointer (Magic Remote wheel) and the D-pad on the same list. */
     var html = '';
-    for (var i = this.start; i < end; i += 1) {
+    for (var i = 0; i < this.items.length; i += 1) {
       var item = this.items[i];
-      html += '<button class="category-button focusable ' + (String(item.id) === this.activeId ? 'active' : '') + '" data-category-index="' + i + '" data-catalog-category="' + escapeHtml(item.id) + '">' + escapeHtml(item.label) + (item.secondary ? '<small>' + escapeHtml(item.secondary) + '</small>' : '') + '</button>';
+      var isActive = String(item.id) === this.activeId;
+      html += '<button class="category-button focusable' + (isActive ? ' active' : '') + '" data-category-index="' + i + '" data-catalog-category="' + escapeHtml(item.id) + '"' + (isActive ? ' aria-current="true"' : '') + '>' +
+        '<span class="category-label">' + escapeHtml(item.label) + '</span>' +
+        (item.secondary ? '<small>' + escapeHtml(item.secondary) + '</small>' : '') +
+        '</button>';
     }
     this.container.innerHTML = html;
-    this.container.setAttribute('data-window-start', String(this.start));
-    this.container.setAttribute('data-window-count', String(end - this.start));
-    if (window.XtreamlyTVNavigation && window.XtreamlyTVNavigation.invalidate) window.XtreamlyTVNavigation.invalidate();
+    this.start = 0;
+    this.container.setAttribute('data-window-start', '0');
+    this.container.setAttribute('data-window-count', String(this.items.length));
+    if (window.OvelaNavigation && window.OvelaNavigation.invalidate) window.OvelaNavigation.invalidate();
     if (focusAfter) this.focusDomIndex(this.focusIndexValue);
+  };
+
+  CategoryRail.prototype.scrollIntoView = function (button) {
+    if (!button) return;
+    var container = this.container;
+    var itemRect = button.getBoundingClientRect();
+    var containerRect = container.getBoundingClientRect();
+    var guard = 12;
+    if (itemRect.top < containerRect.top + guard) {
+      container.scrollTop -= (containerRect.top + guard - itemRect.top);
+    } else if (itemRect.bottom > containerRect.bottom - guard) {
+      container.scrollTop += (itemRect.bottom - (containerRect.bottom - guard));
+    }
   };
 
   CategoryRail.prototype.focusDomIndex = function (index) {
     var button = this.container.querySelector('[data-category-index="' + index + '"]');
     if (!button) return;
     try { button.focus({ preventScroll:true }); } catch (error) { button.focus(); }
+    this.scrollIntoView(button);
   };
 
   CategoryRail.prototype.focusIndex = function (index) {
     if (!this.items.length) return;
     index = clamp(index, 0, this.items.length - 1);
     this.focusIndexValue = index;
-    var nextStart = this.windowStart(index);
-    if (nextStart !== this.start) {
-      this.start = nextStart;
-      this.render(true);
-    } else {
-      this.focusDomIndex(index);
-    }
+    this.focusDomIndex(index);
   };
 
   CategoryRail.prototype.handleKeyDown = function (event) {
@@ -106,5 +123,5 @@
     this.container.removeEventListener('click', this.boundClick);
   };
 
-  window.XtreamlyTVCategoryRail = CategoryRail;
+  window.OvelaCategoryRail = CategoryRail;
 }());

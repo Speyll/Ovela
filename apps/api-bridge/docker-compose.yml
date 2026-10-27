@@ -1,7 +1,7 @@
 services:
-  xtreamlytv-api-bridge:
+  ovela-api-bridge:
     build: .
-    container_name: xtreamlytv-api-bridge
+    container_name: ovela-api-bridge
     restart: unless-stopped
     ports:
       - "8787:8787"

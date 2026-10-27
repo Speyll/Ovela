@@ -62,7 +62,7 @@
   function ensureVisible(candidate) {
     if (!candidate || !candidate.closest) return;
     var horizontalViewport = candidate.closest('.favorite-groups-row,.channel-row,.poster-row,.mixed-row');
-    var verticalViewport = candidate.closest('.virtual-grid-host,.favorite-manager-list,.favorite-item-manager-list,.favorite-editor-settings,.favorite-editor-grid,.scroll-view,.category-list');
+    var verticalViewport = candidate.closest('.virtual-grid-host,.favorite-manager-list,.favorite-item-manager-list,.favorite-editor-settings,.favorite-editor-grid,.scroll-view,.v07-home-scroll,.category-list');
 
     /* Home cards live inside a horizontal row nested in the page's vertical
        scroll view. Keep both axes in sync instead of scrolling only the row. */
@@ -145,12 +145,14 @@
     if (!active || !active.dataset || active.dataset.homeRow === undefined) return false;
     var currentRow = Number(active.dataset.homeRow);
     if (!isFinite(currentRow)) return false;
-    var homeViewport = active.closest ? active.closest('.scroll-view') : document.querySelector('.scroll-view');
+    var homeViewport = active.closest
+      ? active.closest('.scroll-view, .v07-home-scroll')
+      : document.querySelector('.scroll-view, .v07-home-scroll');
     if (delta < 0 && currentRow === 0) {
       if (homeViewport) homeViewport.scrollTop = 0;
       return true;
     }
-    var rows = Array.prototype.slice.call(document.querySelectorAll('[data-home-row]'));
+    var rows = Array.prototype.slice.call(document.querySelectorAll('#view [data-home-row]'));
     var maxRow = rows.reduce(function (max, element) {
       var value = Number(element.dataset.homeRow);
       return isFinite(value) ? Math.max(max, value) : max;
@@ -295,14 +297,24 @@
     return focusSeriesTarget(episodes[targetIndex], false);
   }
   function bestCandidate(list, active, direction) {
-    var a = center(active.getBoundingClientRect());
-    var best = null;
-    var bestScore = Infinity;
+    var a = active.getBoundingClientRect();
+    var aCenter = center(a);
+    var horizontal = direction === 'left' || direction === 'right';
+    var activeIsNav = active.classList && active.classList.contains('nav-item');
+    var candidates = [];
+
     list.forEach(function (candidate) {
       if (candidate === active || !isVisible(candidate)) return;
-      var b = center(candidate.getBoundingClientRect());
-      var dx = b.x - a.x;
-      var dy = b.y - a.y;
+      /* The top bar is a fixed strip above the page. It is only a sensible
+         target for Up from the top of the content, never for Left/Right or
+         from halfway down a scrolled Settings page. */
+      if (!activeIsNav && candidate.classList && candidate.classList.contains('nav-item')) {
+        if (direction !== 'up' || a.top > 200) return;
+      }
+      var b = candidate.getBoundingClientRect();
+      var bCenter = center(b);
+      var dx = bCenter.x - aCenter.x;
+      var dy = bCenter.y - aCenter.y;
       var primary;
       var secondary;
       if (direction === 'left' && dx < -4) { primary = -dx; secondary = Math.abs(dy); }
@@ -310,14 +322,33 @@
       else if (direction === 'up' && dy < -4) { primary = -dy; secondary = Math.abs(dx); }
       else if (direction === 'down' && dy > 4) { primary = dy; secondary = Math.abs(dx); }
       else return;
-      var score = primary + secondary * 2.35;
-      if (score < bestScore) { bestScore = score; best = candidate; }
+      /* Overlap on the perpendicular axis is what makes a move feel like it
+         went "straight" to the neighbouring card. Without it, a same-column
+         control far down the page beats a control directly beside the focused
+         one (Settings was jumping from a provider button to Save bridge). */
+      var overlap = horizontal
+        ? Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)
+        : Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      candidates.push({ element:candidate, primary:primary, secondary:secondary, overlap:overlap });
     });
-    return best;
+
+    if (!candidates.length) return null;
+
+    /* Prefer cards that genuinely line up on the perpendicular axis. Only when
+       nothing overlaps do we accept a near miss (controls inside the same card
+       sit a few pixels apart). */
+    var aligned = candidates.filter(function (entry) { return entry.overlap > 0; });
+    if (!aligned.length) aligned = candidates.filter(function (entry) { return entry.overlap > -24; });
+    var pool = aligned.length ? aligned : candidates;
+    pool.sort(function (one, two) {
+      if (one.primary !== two.primary) return one.primary - two.primary;
+      return one.secondary - two.secondary;
+    });
+    return pool[0].element;
   }
 
   function favoriteScope(active) {
-    var app = window.XtreamlyTVApp || window.TVeeApp;
+    var app = window.OvelaApp || window.TVeeApp;
     if (!app || app.currentView !== 'favorites' || !active || !active.closest) return null;
     return active.closest('.view');
   }
@@ -376,12 +407,12 @@
 
   document.addEventListener('keydown', function (event) {
     if (event.defaultPrevented) return;
-    if ((window.XtreamlyTVApp && window.XtreamlyTVApp.playerOpen) || (window.TVeeApp && window.TVeeApp.playerOpen)) return;
+    if ((window.OvelaApp && window.OvelaApp.playerOpen) || (window.TVeeApp && window.TVeeApp.playerOpen)) return;
     var active = document.activeElement;
     var input = /INPUT|TEXTAREA|SELECT/.test(active && active.tagName);
     if (input && (event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT)) return;
 
-    if ((window.XtreamlyTVApp && window.XtreamlyTVApp.currentView === 'home') && active && active.dataset && active.dataset.homeRow !== undefined && (event.keyCode === KEY.UP || event.keyCode === KEY.DOWN)) {
+    if ((window.OvelaApp && window.OvelaApp.currentView === 'home') && active && active.dataset && active.dataset.homeRow !== undefined && (event.keyCode === KEY.UP || event.keyCode === KEY.DOWN)) {
       if (moveHomeRow(active, event.keyCode === KEY.UP ? -1 : 1)) { event.preventDefault(); return; }
     }
     if (active && active.closest &&
@@ -501,7 +532,7 @@
   }
   window.addEventListener('resize', invalidate);
 
-  window.XtreamlyTVNavigation = window.TVeeNavigation = {
+  window.OvelaNavigation = window.TVeeNavigation = {
     focusFirst:function (selector) {
       var list = focusables(true);
       var el = selector ? document.querySelector(selector) : list[0];

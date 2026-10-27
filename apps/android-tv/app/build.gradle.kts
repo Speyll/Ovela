@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -6,19 +7,52 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Release signing material is never committed. Provide either
+// apps/android-tv/keystore.properties (gitignored) or the OVELA_KEYSTORE_*
+// environment variables. Without them, release builds are unsigned.
+val keystoreProperties = Properties().apply {
+    val propertiesFile = rootProject.file("keystore.properties")
+    if (propertiesFile.exists()) propertiesFile.inputStream().use { load(it) }
+}
+
+fun signingValue(key: String, environment: String): String? =
+    keystoreProperties.getProperty(key) ?: System.getenv(environment)
+
+val releaseStorePath = signingValue("storeFile", "OVELA_KEYSTORE_FILE")
+val releaseStorePassword = signingValue("storePassword", "OVELA_KEYSTORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "OVELA_KEYSTORE_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "OVELA_KEYSTORE_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseStorePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
-    namespace = "com.xtreamlytv.androidtv"
+    namespace = "io.github.speyll.ovela"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.github.xtreamlytv.androidtv"
+        applicationId = "io.github.speyll.ovela"
         minSdk = 23
         targetSdk = 36
-        versionCode = 700
-        versionName = "0.7.0"
+        versionCode = 1000
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseStorePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -28,6 +62,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 

@@ -1,4 +1,4 @@
-# XtreamlyTV for LG webOS
+# Ovela for LG webOS
 
 This is the production-tested platform target. The packaged app is in `app/`; browser smoke tests are in `tests/`.
 

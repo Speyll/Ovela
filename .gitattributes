@@ -1,0 +1,25 @@
+# Normalize text files to LF in the repository. Windows-native scripts keep
+# CRLF so they behave correctly in cmd.exe and Windows PowerShell.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets and packages
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.mp3 binary
+*.mp4 binary
+*.jks binary
+*.keystore binary
+*.p12 binary
+*.ipk binary
+*.apk binary
+*.aab binary

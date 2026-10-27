@@ -1,19 +1,21 @@
-/* XtreamlyTV v0.7.0 webOS browsing and interaction layer.
+/* Ovela webOS browsing and interaction layer.
  *
- * Owns the v0.7 living-room navigation shell, category wheel, guide-first
- * Live TV surface, Movies/Series hero + poster rail, scoped search overlay,
- * Favorites presentation, and remote-first focus routing.
+ * Owns the living-room shell, readable category rail, flat Live TV channel
+ * list, poster catalog, staged category visibility settings, Favorites
+ * presentation, and remote-first focus routing.
  */
 (function () {
   'use strict';
 
-  var App = window.XtreamlyTVApp || window.TVeeApp;
-  var Store = window.XtreamlyTVStore || window.TVeeStore;
+  var App = window.OvelaApp || window.TVeeApp;
+  var Store = window.OvelaStore || window.TVeeStore;
   if (!App || !Store || App.__v07UiRefreshInstalled) return;
 
   var KEY = { LEFT:37, UP:38, RIGHT:39, DOWN:40, ENTER:13, BACK:461, ESC:27, BACKSPACE:8, CH_UP:427, CH_DOWN:428 };
+  var CATEGORY_GROUP_ALL = '__all__';
+  var CATEGORY_GROUP_OTHER = '__other__';
   var V = {
-    version:'0.7.0',
+    version:'1.0.0',
     mediaIndex:{ movies:0, series:0 },
     selectedKey:{ movies:'', series:'', live:'' },
     liveIndex:0,
@@ -37,6 +39,7 @@
     searchViewportSync:null,
     movieHeroOriginIndex:null,
     mediaRailWindow:{ movies:null, series:null },
+    categoryManager:null,
     richPrefetchTimer:null,
     richPrefetchPromises:{},
     seriesDetailBrowseSnapshot:null,
@@ -153,21 +156,38 @@
     return url;
   }
 
+  function sizedArtworkUrl(value, size) {
+    var url = artworkUrl(value);
+    if (!url || !/image\.tmdb\.org/i.test(url)) return url;
+    return url.replace(
+      /\/t\/p\/(?:w\d+(?:_and_h\d+_[^/]+)?|original)\//i,
+      '/t/p/' + size + '/'
+    );
+  }
+
+  function posterArtworkUrl(value) {
+    return sizedArtworkUrl(value, 'w500');
+  }
+
+  function backdropArtworkUrl(value) {
+    return sizedArtworkUrl(value, 'w1280');
+  }
+
   function firstBackdrop(item) {
     if (!item) return '';
     var paths = item.backdrop_path || item.backdrops || (item.info && item.info.backdrop_path);
     if (typeof paths === 'string') {
-      var direct = artworkUrl(paths);
+      var direct = backdropArtworkUrl(paths);
       if (direct) return direct;
       try { paths = JSON.parse(paths); } catch (error) { paths = null; }
     }
     if (paths && Object.prototype.toString.call(paths) === '[object Array]') {
       for (var i = 0; i < paths.length; i += 1) {
-        var candidate = artworkUrl(paths[i]);
+        var candidate = backdropArtworkUrl(paths[i]);
         if (candidate) return candidate;
       }
     }
-    return artworkUrl(item.backdrop || item.fanart || item.fan_art || (item.info && (item.info.backdrop || item.info.fanart || item.info.fan_art)));
+    return backdropArtworkUrl(item.backdrop || item.fanart || item.fan_art || (item.info && (item.info.backdrop || item.info.fanart || item.info.fan_art)));
   }
 
   function backdropImageOf(item) {
@@ -193,7 +213,7 @@
     var urls = [];
     var seen = {};
     raw.forEach(function (value) {
-      var url = artworkUrl(value);
+      var url = posterArtworkUrl(value);
       if (!url || seen[url]) return;
       seen[url] = true;
       urls.push(url);
@@ -275,8 +295,8 @@
     return '<div class="' + className + (image ? '' : ' image-failed') + '">' +
       (image ? '<img src="' + esc(image) + '" alt="" loading="eager" draggable="false" ' +
         'data-v07-art-candidates="' + esc(encodedCandidates) + '" data-v07-art-index="0" data-v07-art-retries="0" ' +
-        'onload="window.XtreamlyTVV07PosterLoaded&&window.XtreamlyTVV07PosterLoaded(this)" ' +
-        'onerror="window.XtreamlyTVV07PosterFailed&&window.XtreamlyTVV07PosterFailed(this,false)">' : '') +
+        'onload="window.OvelaV07PosterLoaded&&window.OvelaV07PosterLoaded(this)" ' +
+        'onerror="window.OvelaV07PosterFailed&&window.OvelaV07PosterFailed(this,false)">' : '') +
       '<div class="v07-poster-fallback"><span>' + esc(initials(titleOf(item))) + '</span></div></div>';
   }
 
@@ -298,7 +318,7 @@
     image.parentNode.classList.add('image-failed');
   }
 
-  window.XtreamlyTVV07PosterLoaded = function (image) {
+  window.OvelaV07PosterLoaded = function (image) {
     if (!image) return;
     var url = artworkUrl(image.getAttribute('src'));
     if (url) V.artworkPreload[url] = 'ready';
@@ -306,7 +326,7 @@
     if (image.parentNode) image.parentNode.classList.remove('image-failed');
   };
 
-  window.XtreamlyTVV07PosterFailed = function (image, watchdog) {
+  window.OvelaV07PosterFailed = function (image, watchdog) {
     if (!image || !image.parentNode) return;
     var candidates = posterCandidateList(image);
     var currentIndex = Number(image.getAttribute('data-v07-art-index') || 0);
@@ -343,7 +363,7 @@
     window.setTimeout(function () {
       if (!image.parentNode || image.style.display === 'none') return;
       if (!image.complete || Number(image.naturalWidth || 0) <= 0) {
-        window.XtreamlyTVV07PosterFailed(image, true);
+        window.OvelaV07PosterFailed(image, true);
       }
     }, 6500);
   }
@@ -430,6 +450,7 @@
       });
     }
     return {
+      live:normalized(source.live),
       movies:normalized(source.movies),
       series:normalized(source.series)
     };
@@ -442,7 +463,7 @@
 
   function isProviderCategoryHidden(kind, categoryId) {
     categoryId = String(categoryId == null ? '' : categoryId);
-    if (!categoryId || (kind !== 'movies' && kind !== 'series')) return false;
+    if (!categoryId || (kind !== 'live' && kind !== 'movies' && kind !== 'series')) return false;
     return hiddenCategoryIds(kind).indexOf(categoryId) >= 0;
   }
 
@@ -487,7 +508,7 @@
   }
 
   function itemHiddenByCategory(item, type) {
-    var kind = type === 'movie' ? 'movies' : (type === 'series' || type === 'episode' ? 'series' : '');
+    var kind = type === 'live' ? 'live' : (type === 'movie' ? 'movies' : (type === 'series' || type === 'episode' ? 'series' : ''));
     if (!kind) return false;
     var hidden = hiddenCategoryIds(kind);
     if (!hidden.length) return false;
@@ -496,11 +517,14 @@
 
   function firstVisibleLoadedItem(kind) {
     var type = typeForKind(kind);
-    var items = App.loadedItems(kind) || [];
-    for (var i = 0; i < items.length; i += 1) {
-      if (!itemHiddenByCategory(items[i], type)) return items[i];
-    }
-    return null;
+    var first = null;
+    if (typeof App.forEachLoadedItem !== 'function') return null;
+    App.forEachLoadedItem(kind, function (item) {
+      if (itemHiddenByCategory(item, type)) return true;
+      first = item;
+      return false;
+    });
+    return first;
   }
 
   function providerCategoriesForSettings(kind) {
@@ -518,29 +542,108 @@
     return category ? String(category.category_name || ('Category ' + id)) : ('Category ' + id);
   }
 
-  function setProviderCategoryHidden(kind, categoryId, hidden) {
-    if (kind !== 'movies' && kind !== 'series') return;
-    categoryId = String(categoryId || '');
-    if (!categoryId) return;
+  function rebuildLoadedItemLookup() {
+    App.itemLookup = {};
+    ['live', 'movies', 'series'].forEach(function (library) {
+      Object.keys(App.catalogCache[library] || {}).forEach(function (categoryId) {
+        App.indexItems(library, App.catalogCache[library][categoryId]);
+      });
+    });
+  }
 
+  function pruneHiddenCategoryCache(kind, values) {
+    var cache = App.catalogCache[kind] || {};
+    var hidden = {};
+    values.forEach(function (id) { hidden[String(id)] = true; });
+    var changed = false;
+    Object.keys(cache).forEach(function (categoryId) {
+      if (hidden[String(categoryId)]) {
+        delete cache[categoryId];
+        changed = true;
+      }
+    });
+    if (cache.all) {
+      var visibleAll = cache.all.filter(function (item) { return !itemHiddenByCategory(item, typeForKind(kind)); });
+      if (visibleAll.length !== cache.all.length) {
+        cache.all = visibleAll;
+        changed = true;
+      }
+    }
+    if (App.cacheOrder[kind]) {
+      var order = App.cacheOrder[kind].filter(function (categoryId) { return !hidden[String(categoryId)]; });
+      if (order.length !== App.cacheOrder[kind].length) changed = true;
+      App.cacheOrder[kind] = order;
+    }
+    var current = (App.currentItems[kind] || []).filter(function (item) {
+      return !itemHiddenByCategory(item, typeForKind(kind));
+    });
+    if (current.length !== (App.currentItems[kind] || []).length) {
+      App.currentItems[kind] = current;
+      App.currentFilteredItems[kind] = current.filter(function (item) {
+        var search = String(App.searchText[kind] || '').trim().toLowerCase();
+        return !search || (item._search || titleOf(item).toLowerCase()).indexOf(search) >= 0;
+      });
+      if (App.currentView === kind && document.getElementById('catalogGrid')) App.updateCatalogGrid(kind);
+    }
+    if (changed) rebuildLoadedItemLookup();
+  }
+
+  function setProviderCategoriesHidden(kind, hiddenIds) {
+    if (kind !== 'live' && kind !== 'movies' && kind !== 'series') return;
+    var provider = providerCategoriesForSettings(kind).map(function (category) { return String(category.category_id); });
+    var seen = {};
+    var values = (hiddenIds || []).map(function (id) { return String(id); }).filter(function (id) {
+      if (!id || seen[id]) return false;
+      seen[id] = true;
+      return provider.length ? provider.indexOf(id) >= 0 : true;
+    });
     var config = hiddenCatalogConfig();
-    var values = config[kind].slice();
-    var index = values.indexOf(categoryId);
-    if (hidden && index < 0) values.push(categoryId);
-    if (!hidden && index >= 0) values.splice(index, 1);
     config[kind] = values;
-
     Store.updateSettings({ hiddenCatalogCategories:config });
     App.state = Store.getState();
 
-    if (hidden && String(App.activeCategory[kind] || '') === categoryId) {
+    var active = String(App.activeCategory[kind] || '');
+    if (active && values.indexOf(active) >= 0) {
       App.activeCategory[kind] = '';
       App.currentItems[kind] = [];
       App.currentFilteredItems[kind] = [];
-      V.mediaIndex[kind] = 0;
-      V.selectedKey[kind] = '';
+      if (kind === 'live') {
+        V.liveIndex = 0;
+        V.selectedKey.live = '';
+      } else {
+        V.mediaIndex[kind] = 0;
+        V.selectedKey[kind] = '';
+      }
     }
+    pruneHiddenCategoryCache(kind, values);
   }
+
+  function setProviderCategoryHidden(kind, categoryId, hidden) {
+    if (kind !== 'live' && kind !== 'movies' && kind !== 'series') return;
+    categoryId = String(categoryId || '');
+    if (!categoryId) return;
+    var values = hiddenCategoryIds(kind).slice();
+    var index = values.indexOf(categoryId);
+    if (hidden && index < 0) values.push(categoryId);
+    if (!hidden && index >= 0) values.splice(index, 1);
+    setProviderCategoriesHidden(kind, values);
+  }
+
+  /* Defence in depth for provider responses that mix categories (or an
+     "all" cache loaded before the settings change). Keeping this in the one
+     filtering entry point prevents hidden artwork from being rendered even if
+     a legacy cache entry survives. */
+  var baseFilteredCatalogItems = App.filteredCatalogItems;
+  App.filteredCatalogItems = function (kind) {
+    var items = baseFilteredCatalogItems.call(this, kind);
+    var hidden = hiddenCategoryIds(kind);
+    if (!hidden.length) return items;
+    var lookup = {};
+    hidden.forEach(function (id) { lookup[String(id)] = true; });
+    return items.filter(function (item) {
+      return !itemCategoryIds(item).some(function (id) { return !!lookup[String(id)]; });
+    });
+  };
 
   function blockedCategoryGroupHtml(kind, title) {
     var hidden = hiddenCategoryIds(kind);
@@ -568,78 +671,524 @@
       '<div class="v07-blocked-list">' + blocked + '</div></div>';
   }
 
+
+  function managerState() {
+    if (!V.categoryManager) {
+      V.categoryManager = {
+        kind:'live',
+        query:'',
+        hiddenOnly:false,
+        groupKey:CATEGORY_GROUP_ALL,
+        languageKey:OvelaCore.CATEGORY_ALL_FACET,
+        qualityKey:OvelaCore.CATEGORY_ALL_FACET,
+        staged:{ live:null, movies:null, series:null },
+        status:'',
+        confirm:false,
+        undo:null,
+        focusAfter:null
+      };
+    }
+    return V.categoryManager;
+  }
+
+  function managerKindLabel(kind) {
+    if (kind === 'live') return 'Live TV';
+    if (kind === 'movies') return 'Movies';
+    return 'Series';
+  }
+
+  /* The core classifier owns alias normalization and matching. Prefixes stay
+     the provider spelling; recognized leading labels (ENGLISH, ESPANA, 4K)
+     become groups too, while unknown names remain under Other. */
+  function categoryInfo(name) {
+    return OvelaCore.classifyCategory(name);
+  }
+
+  function categoryGroupKey(name) {
+    return categoryInfo(name).groupKey;
+  }
+
+  function categoryGroups(categories) {
+    var labels = {};
+    var members = {};
+    var order = [];
+    var other = [];
+    (categories || []).forEach(function (category) {
+      var name = String(category && category.category_name || ('Category ' + (category && category.category_id)));
+      var info = categoryInfo(name);
+      if (info.groupKey === CATEGORY_GROUP_OTHER) {
+        other.push(category);
+        return;
+      }
+      var key = info.groupKey;
+      if (!Object.prototype.hasOwnProperty.call(labels, key)) {
+        labels[key] = info.groupLabel;
+        members[key] = [];
+        order.push(key);
+      }
+      members[key].push(category);
+    });
+    order.sort(function (left, right) {
+      var a = labels[left].toLowerCase();
+      var b = labels[right].toLowerCase();
+      return a < b ? -1 : (a > b ? 1 : 0);
+    });
+    var groups = order.map(function (key) {
+      return { key:key, label:labels[key], categories:members[key] };
+    });
+    if (other.length) {
+      groups.push({ key:CATEGORY_GROUP_OTHER, label:'Other', categories:other });
+    }
+    return groups;
+  }
+
+  function managerGroups(kind) {
+    return categoryGroups(managerCategories(kind));
+  }
+
+  function managerFacets(kind, dimension) {
+    return OvelaCore.categoryFacets(managerCategories(kind), dimension);
+  }
+
+  function managerEnsureGroup(kind) {
+    var m = managerState();
+    if (!m.groupKey) m.groupKey = CATEGORY_GROUP_ALL;
+    if (m.groupKey !== CATEGORY_GROUP_ALL && !managerGroups(kind).some(function (group) {
+      return group.key === m.groupKey;
+    })) {
+      m.groupKey = CATEGORY_GROUP_ALL;
+    }
+    return m.groupKey;
+  }
+
+  function managerActiveGroup(kind) {
+    var key = managerEnsureGroup(kind);
+    if (key === CATEGORY_GROUP_ALL) return null;
+    return managerGroups(kind).find(function (group) { return group.key === key; }) || null;
+  }
+
+  function managerEnsureFacets(kind) {
+    var m = managerState();
+    ['language','quality'].forEach(function (dimension) {
+      var key = dimension === 'language' ? 'languageKey' : 'qualityKey';
+      var values = managerFacets(kind, dimension);
+      if (m[key] !== OvelaCore.CATEGORY_ALL_FACET &&
+        !values.some(function (value) { return value.key === m[key]; })) {
+        m[key] = OvelaCore.CATEGORY_ALL_FACET;
+      }
+    });
+  }
+
+  function managerChangeSummary(kind) {
+    var persisted = hiddenCategoryIds(kind);
+    var staged = managerHidden(kind);
+    var hideCount = staged.filter(function (id) { return persisted.indexOf(id) < 0; }).length;
+    var showCount = persisted.filter(function (id) { return staged.indexOf(id) < 0; }).length;
+    return { hideCount:hideCount, showCount:showCount, total:hideCount + showCount };
+  }
+
+  function managerCategories(kind) {
+    // Keep provider order. Classification adds metadata and filters; it must
+    // never rewrite or reorder the names the provider delivered.
+    return providerCategoriesForSettings(kind).slice();
+  }
+
+  function managerHidden(kind) {
+    var m = managerState();
+    return m.staged[kind] ? m.staged[kind].slice() : hiddenCategoryIds(kind).slice();
+  }
+
+  function managerSet(kind, ids) {
+    var m = managerState();
+    m.staged[kind] = ids.slice();
+    m.confirm = false;
+    m.status = '';
+  }
+
+  function managerChangedCount(kind) {
+    return managerChangeSummary(kind).total;
+  }
+
+  function managerFiltered(kind) {
+    var m = managerState();
+    var hidden = managerHidden(kind);
+    var query = String(m.query || '').trim().toLowerCase();
+    var activeGroup = managerEnsureGroup(kind);
+    return managerCategories(kind).filter(function (category) {
+      var id = String(category.category_id);
+      var name = String(category.category_name || ('Category ' + id));
+      if (activeGroup !== CATEGORY_GROUP_ALL && categoryGroupKey(name) !== activeGroup) return false;
+      if (!OvelaCore.categoryMatchesFacet(name, 'language', m.languageKey)) return false;
+      if (!OvelaCore.categoryMatchesFacet(name, 'quality', m.qualityKey)) return false;
+      if (m.hiddenOnly && hidden.indexOf(id) < 0) return false;
+      if (!query) return true;
+      return name.toLowerCase().indexOf(query) >= 0 || id.toLowerCase().indexOf(query) >= 0;
+    });
+  }
+
+  function managerFocus(section, selector) {
+    if (!section) return;
+    setTimeout(function () {
+      var target = section.querySelector(selector);
+      if (!target) return;
+      try { target.focus({ preventScroll:true }); } catch (error) { target.focus(); }
+    }, 0);
+  }
+
+  function renderCategoryManagerGroups(section) {
+    var m = managerState();
+    var host = section && section.querySelector('#v07CategoryGroups');
+    var wrapper = section && section.querySelector('#v07CategoryGroupFacet');
+    if (!host || !wrapper) return;
+    var active = managerEnsureGroup(m.kind);
+    var groups = managerGroups(m.kind);
+    var total = managerCategories(m.kind).length;
+    var hasRealPrefixes = groups.some(function (group) { return group.key !== CATEGORY_GROUP_OTHER; });
+    if (!hasRealPrefixes) {
+      m.groupKey = CATEGORY_GROUP_ALL;
+      host.innerHTML = '';
+      wrapper.style.display = 'none';
+      return;
+    }
+    wrapper.style.display = '';
+    var html = '<button type="button" class="v07-manager-group focusable' + (active === CATEGORY_GROUP_ALL ? ' active' : '') + '" data-v07-manager-group="' + CATEGORY_GROUP_ALL + '">All <span>' + total + '</span></button>';
+    html += groups.map(function (group) {
+      return '<button type="button" class="v07-manager-group focusable' + (active === group.key ? ' active' : '') + '" data-v07-manager-group="' + esc(group.key) + '">' +
+        esc(group.label) + ' <span>' + group.categories.length + '</span></button>';
+    }).join('');
+    host.innerHTML = html;
+    Array.prototype.forEach.call(host.querySelectorAll('[data-v07-manager-group]'), function (button) {
+      button.addEventListener('click', function () {
+        m.groupKey = String(button.getAttribute('data-v07-manager-group') || CATEGORY_GROUP_ALL);
+        m.confirm = false;
+        renderCategoryManagerFilters(section);
+        renderCategoryManagerRows(section);
+        renderCategoryManagerActions(section);
+        renderCategoryManagerFooter(section);
+        managerFocus(section, '[data-v07-manager-group="' + m.groupKey.replace(/"/g, '\\"') + '"]');
+      });
+    });
+  }
+
+  function renderCategoryManagerFacet(section, dimension) {
+    var m = managerState();
+    var isLanguage = dimension === 'language';
+    var host = section && section.querySelector(isLanguage ? '#v07CategoryLanguages' : '#v07CategoryQualities');
+    var wrapper = section && section.querySelector(isLanguage ? '#v07CategoryLanguageFacet' : '#v07CategoryQualityFacet');
+    if (!host || !wrapper) return;
+    var keyName = isLanguage ? 'languageKey' : 'qualityKey';
+    var allKey = OvelaCore.CATEGORY_ALL_FACET;
+    var options = managerFacets(m.kind, dimension);
+    var hasReal = options.some(function (option) { return option.key !== OvelaCore.CATEGORY_UNCLASSIFIED_FACET; });
+    if (!hasReal) {
+      m[keyName] = allKey;
+      host.innerHTML = '';
+      wrapper.style.display = 'none';
+      return;
+    }
+    wrapper.style.display = '';
+    var attribute = isLanguage ? 'data-v07-manager-language' : 'data-v07-manager-quality';
+    var html = '<button type="button" class="v07-manager-group focusable' + (m[keyName] === allKey ? ' active' : '') + '" ' + attribute + '="' + allKey + '">Any</button>';
+    html += options.map(function (option) {
+      return '<button type="button" class="v07-manager-group focusable' + (m[keyName] === option.key ? ' active' : '') + '" ' + attribute + '="' + esc(option.key) + '">' +
+        esc(option.label) + ' <span>' + option.count + '</span></button>';
+    }).join('');
+    host.innerHTML = html;
+    Array.prototype.forEach.call(host.querySelectorAll('[' + attribute + ']'), function (button) {
+      button.addEventListener('click', function () {
+        m[keyName] = String(button.getAttribute(attribute) || allKey);
+        m.confirm = false;
+        renderCategoryManagerFilters(section);
+        renderCategoryManagerRows(section);
+        renderCategoryManagerActions(section);
+        renderCategoryManagerFooter(section);
+        managerFocus(section, '[' + attribute + '="' + m[keyName].replace(/"/g, '\\"') + '"]');
+      });
+    });
+  }
+
+  function renderCategoryManagerFilters(section) {
+    managerEnsureFacets(managerState().kind);
+    renderCategoryManagerGroups(section);
+    renderCategoryManagerFacet(section, 'language');
+    renderCategoryManagerFacet(section, 'quality');
+  }
+
+  function renderCategoryManagerRows(section) {
+    var m = managerState();
+    var rows = section && section.querySelector('#v07CategoryRows');
+    if (!rows) return;
+    var list = managerFiltered(m.kind);
+    var hidden = managerHidden(m.kind);
+    var scrollTop = rows.scrollTop || 0;
+    if (!list.length) {
+      rows.innerHTML = '<div class="v07-manager-empty">No categories match this filter.</div>';
+    } else {
+      rows.innerHTML = list.map(function (category) {
+        var id = String(category.category_id);
+        var name = String(category.category_name || ('Category ' + id));
+        var isHidden = hidden.indexOf(id) >= 0;
+        var info = categoryInfo(name);
+        var meta = info.summary + (info.groupLabel !== 'Other' ? ' · group ' + info.groupLabel : '');
+        return '<button type="button" class="v07-category-row focusable' + (isHidden ? ' is-hidden' : '') + '" data-v07-manager-category="' + esc(id) + '">' +
+          '<span class="v07-category-check" aria-hidden="true">' + (isHidden ? '✓' : '') + '</span>' +
+          '<span class="v07-category-name"><span class="v07-category-title">' + esc(name) + '</span><span class="v07-category-meta">' + esc(meta) + '</span></span>' +
+          '<span class="v07-category-state">' + (isHidden ? 'Hidden' : 'Visible') + '</span>' +
+        '</button>';
+      }).join('');
+    }
+    rows.scrollTop = scrollTop;
+    if (scrollTop) {
+      // Layout can settle after innerHTML replacement; restore once more
+      // without moving focus or the surrounding settings page.
+      window.requestAnimationFrame(function () { rows.scrollTop = scrollTop; });
+    }
+
+    var summary = section.querySelector('#v07CategorySummary');
+    if (summary) summary.textContent = list.length + ' shown · ' + hidden.length + ' hidden';
+    Array.prototype.forEach.call(rows.querySelectorAll('[data-v07-manager-category]'), function (button) {
+      button.addEventListener('click', function () {
+        var id = String(button.getAttribute('data-v07-manager-category') || '');
+        var current = managerHidden(m.kind);
+        var index = current.indexOf(id);
+        if (index >= 0) current.splice(index, 1);
+        else current.push(id);
+        managerSet(m.kind, current);
+        renderCategoryManagerRows(section);
+        renderCategoryManagerFooter(section);
+        managerFocus(section, '[data-v07-manager-category="' + id.replace(/"/g, '\\"') + '"]');
+      });
+    });
+  }
+
+  function renderCategoryManagerActions(section) {
+    var m = managerState();
+    var bar = section && section.querySelector('#v07CategoryActionBar');
+    if (!bar) return;
+    var activeGroup = managerActiveGroup(m.kind);
+    var allCount = managerCategories(m.kind).length;
+    var html =
+      '<button type="button" id="v07CategorySelectAll" class="secondary-button focusable">Hide shown</button>' +
+      '<button type="button" id="v07CategoryDeselectAll" class="secondary-button focusable">Show shown</button>' +
+      '<button type="button" id="v07CategoryHiddenOnly" class="secondary-button focusable' + (m.hiddenOnly ? ' active' : '') + '">' + (m.hiddenOnly ? 'Hidden only' : 'Show all') + '</button>' +
+      '<button type="button" id="v07CategoryHideAll" class="secondary-button focusable">Hide all ' + allCount + '</button>' +
+      '<button type="button" id="v07CategoryShowAll" class="secondary-button focusable">Show all ' + allCount + '</button>';
+    if (activeGroup) {
+      html +=
+        '<button type="button" id="v07CategoryHideGroup" class="secondary-button focusable">Hide ' + esc(activeGroup.label) + ' ' + activeGroup.categories.length + '</button>' +
+        '<button type="button" id="v07CategoryShowGroup" class="secondary-button focusable">Show ' + esc(activeGroup.label) + ' ' + activeGroup.categories.length + '</button>';
+    }
+    bar.innerHTML = html;
+
+    function idsOf(categories) {
+      return (categories || []).map(function (category) { return String(category.category_id); });
+    }
+
+    function bulk(ids, hidden, fallbackSelector) {
+      var next = managerHidden(m.kind).slice();
+      if (hidden) {
+        ids.forEach(function (id) { if (next.indexOf(id) < 0) next.push(id); });
+      } else {
+        next = next.filter(function (id) { return ids.indexOf(id) < 0; });
+      }
+      managerSet(m.kind, next);
+      renderCategoryManagerRows(section);
+      renderCategoryManagerActions(section);
+      renderCategoryManagerFooter(section);
+      managerFocus(section, section.querySelector('#v07CategoryRows .v07-category-row') ? '#v07CategoryRows .v07-category-row' : fallbackSelector);
+    }
+
+    var selectAll = bar.querySelector('#v07CategorySelectAll');
+    var deselectAll = bar.querySelector('#v07CategoryDeselectAll');
+    var hiddenOnly = bar.querySelector('#v07CategoryHiddenOnly');
+    var hideAll = bar.querySelector('#v07CategoryHideAll');
+    var showAll = bar.querySelector('#v07CategoryShowAll');
+    var hideGroup = bar.querySelector('#v07CategoryHideGroup');
+    var showGroup = bar.querySelector('#v07CategoryShowGroup');
+    if (selectAll) selectAll.addEventListener('click', function () {
+      bulk(idsOf(managerFiltered(m.kind)), true, '#v07CategorySelectAll');
+    });
+    if (deselectAll) deselectAll.addEventListener('click', function () {
+      bulk(idsOf(managerFiltered(m.kind)), false, '#v07CategoryDeselectAll');
+    });
+    if (hideAll) hideAll.addEventListener('click', function () {
+      bulk(idsOf(managerCategories(m.kind)), true, '#v07CategoryHideAll');
+    });
+    if (showAll) showAll.addEventListener('click', function () {
+      bulk(idsOf(managerCategories(m.kind)), false, '#v07CategoryShowAll');
+    });
+    if (hideGroup) hideGroup.addEventListener('click', function () {
+      var group = managerActiveGroup(m.kind);
+      if (group) bulk(idsOf(group.categories), true, '#v07CategoryHideGroup');
+    });
+    if (showGroup) showGroup.addEventListener('click', function () {
+      var group = managerActiveGroup(m.kind);
+      if (group) bulk(idsOf(group.categories), false, '#v07CategoryShowGroup');
+    });
+    if (hiddenOnly) hiddenOnly.addEventListener('click', function () {
+      m.hiddenOnly = !m.hiddenOnly;
+      renderCategoryManagerActions(section);
+      renderCategoryManagerRows(section);
+      managerFocus(section, '#v07CategoryHiddenOnly');
+    });
+  }
+
+  function renderCategoryManagerFooter(section) {
+    var m = managerState();
+    var footer = section && section.querySelector('#v07CategoryFooter');
+    if (!footer) return;
+    var summary = managerChangeSummary(m.kind);
+    var changed = summary.total;
+    var html = '';
+    if (changed > 0) {
+      html += '<div class="v07-manager-changebar"><span class="v07-manager-change">' + changed + (changed === 1 ? ' unsaved change' : ' unsaved changes') + ' · hide ' + summary.hideCount + ' · show ' + summary.showCount + '</span>' +
+        '<button type="button" id="v07CategoryCancel" class="secondary-button focusable">Cancel</button>' +
+        '<button type="button" id="v07CategoryApply" class="primary-button focusable">Apply ' + changed + '</button></div>';
+    }
+    if (m.confirm) {
+      html += '<div class="v07-manager-confirm"><strong>Hide ' + summary.hideCount + ' and show ' + summary.showCount + ' categories?</strong>' +
+        '<span>' + changed + ' total changes. Hidden categories disappear from browse, Home and Favourites for this profile.</span>' +
+        '<div><button type="button" id="v07CategoryConfirm" class="primary-button focusable">Apply changes</button>' +
+        '<button type="button" id="v07CategoryKeepEditing" class="secondary-button focusable">Keep editing</button></div></div>';
+    }
+    if (m.status) {
+      html += '<div class="v07-manager-status"><span>' + esc(m.status) + '</span>' +
+        (m.undo && m.undo.kind === m.kind ? '<button type="button" id="v07CategoryUndo" class="secondary-button focusable">Undo</button>' : '') + '</div>';
+    }
+    footer.innerHTML = html;
+
+    function apply() {
+      var count = managerChangedCount(m.kind);
+      if (!count) return;
+      if (count > 8 && !m.confirm) {
+        m.confirm = true;
+        renderCategoryManagerFooter(section);
+        managerFocus(section, '#v07CategoryConfirm');
+        return;
+      }
+      var previous = hiddenCategoryIds(m.kind).slice();
+      var next = managerHidden(m.kind).slice();
+      setProviderCategoriesHidden(m.kind, next);
+      m.staged[m.kind] = null;
+      m.confirm = false;
+      m.undo = { kind:m.kind, previous:previous };
+      m.status = 'Category visibility saved.';
+      renderCategoryManagerRows(section);
+      renderCategoryManagerActions(section);
+      renderCategoryManagerFooter(section);
+      managerFocus(section, '#v07CategoryRows .v07-category-row');
+      App.toast('Category visibility saved');
+    }
+
+    var applyButton = footer.querySelector('#v07CategoryApply');
+    var confirmButton = footer.querySelector('#v07CategoryConfirm');
+    var cancelButton = footer.querySelector('#v07CategoryCancel');
+    var keepButton = footer.querySelector('#v07CategoryKeepEditing');
+    var undoButton = footer.querySelector('#v07CategoryUndo');
+    if (applyButton) applyButton.addEventListener('click', apply);
+    if (confirmButton) confirmButton.addEventListener('click', apply);
+    if (cancelButton) cancelButton.addEventListener('click', function () {
+      m.staged[m.kind] = null;
+      m.confirm = false;
+      m.status = 'Unsaved changes discarded.';
+      renderCategoryManagerRows(section);
+      renderCategoryManagerActions(section);
+      renderCategoryManagerFooter(section);
+      managerFocus(section, '#v07CategoryRows .v07-category-row');
+    });
+    if (keepButton) keepButton.addEventListener('click', function () {
+      m.confirm = false;
+      renderCategoryManagerFooter(section);
+      managerFocus(section, '#v07CategoryRows .v07-category-row');
+    });
+    if (undoButton) undoButton.addEventListener('click', function () {
+      if (!m.undo) return;
+      setProviderCategoriesHidden(m.undo.kind, m.undo.previous);
+      m.undo = null;
+      m.staged[m.kind] = null;
+      m.status = 'Changes undone.';
+      renderCategoryManagerRows(section);
+      renderCategoryManagerActions(section);
+      renderCategoryManagerFooter(section);
+      managerFocus(section, '#v07CategoryRows .v07-category-row');
+      App.toast('Category visibility restored');
+    });
+  }
+
   function renderBlockedCategorySettings() {
     var grid = document.querySelector('.settings-grid');
     if (!grid) return;
     var old = document.getElementById('v07BlockedCategories');
     if (old && old.parentNode) old.parentNode.removeChild(old);
 
+    var m = managerState();
+    var counts = {
+      live:providerCategoriesForSettings('live').length,
+      movies:providerCategoriesForSettings('movies').length,
+      series:providerCategoriesForSettings('series').length
+    };
     var section = document.createElement('section');
     section.id = 'v07BlockedCategories';
-    section.className = 'settings-card v07-blocked-categories';
+    section.className = 'settings-card v07-category-manager';
     section.innerHTML =
-      '<h3>Blocked Movies / Series Categories</h3>' +
-      '<p>Blocked provider categories are removed from the Movies/Series wheels and their items are hidden from Home and Favorites. This is a local visibility filter; it is not PIN-protected.</p>' +
-      blockedCategoryGroupHtml('movies', 'Movies') +
-      blockedCategoryGroupHtml('series', 'Series');
+      '<div class="v07-manager-head"><div><h3>Manage categories</h3>' +
+      '<p>Choose which provider categories appear in browse. Changes apply to Live TV, Movies and Series independently.</p></div>' +
+      '<span id="v07CategorySummary" class="v07-manager-summary"></span></div>' +
+      '<div class="v07-manager-tabs">' +
+        ['live','movies','series'].map(function (kind) {
+          return '<button type="button" class="v07-manager-tab focusable' + (m.kind === kind ? ' active' : '') + '" data-v07-manager-kind="' + kind + '">' +
+            managerKindLabel(kind) + ' <span>' + counts[kind] + '</span></button>';
+        }).join('') +
+      '</div>' +
+      '<div id="v07CategoryGroupFacet" class="v07-manager-facet"><span class="v07-manager-facet-label">Group</span>' +
+        '<div id="v07CategoryGroups" class="v07-manager-groups"></div></div>' +
+      '<div id="v07CategoryLanguageFacet" class="v07-manager-facet"><span class="v07-manager-facet-label">Language</span>' +
+        '<div id="v07CategoryLanguages" class="v07-manager-groups"></div></div>' +
+      '<div id="v07CategoryQualityFacet" class="v07-manager-facet"><span class="v07-manager-facet-label">Quality</span>' +
+        '<div id="v07CategoryQualities" class="v07-manager-groups"></div></div>' +
+      '<div class="v07-manager-tools"><input id="v07CategorySearch" class="search-box focusable" type="search" placeholder="Search categories" value="' + esc(m.query) + '">' +
+      '<div id="v07CategoryActionBar" class="v07-manager-actions"></div></div>' +
+      '<div id="v07CategoryRows" class="v07-category-rows"></div>' +
+      '<div id="v07CategoryFooter" class="v07-manager-footer"></div>';
     grid.appendChild(section);
 
-    function bindBlock(kind, selectId, buttonId) {
-      var select = document.getElementById(selectId);
-      var button = document.getElementById(buttonId);
-      if (!select || !button) return;
-
-      /* LG webOS spatial navigation does not reliably cross from a native
-         <select> into a sibling button. Own that horizontal transition so the
-         remote can always reach Block category. */
-      select.addEventListener('keydown', function (event) {
-        if (event.keyCode === KEY.RIGHT) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          button.focus();
-        }
-      }, true);
-      button.addEventListener('keydown', function (event) {
-        if (event.keyCode === KEY.LEFT) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          select.focus();
-        }
-      }, true);
-
+    Array.prototype.forEach.call(section.querySelectorAll('[data-v07-manager-kind]'), function (button) {
       button.addEventListener('click', function () {
-        var id = String(select.value || '');
-        if (!id) return;
-        var name = categoryNameById(kind, id);
-        setProviderCategoryHidden(kind, id, true);
-        App.toast('Blocked ' + name);
-        patchSettings();
-        setTimeout(function () {
-          var next = document.getElementById(selectId);
-          if (next) next.focus();
-        }, 0);
+        m.kind = String(button.getAttribute('data-v07-manager-kind') || 'live');
+        m.query = '';
+        m.hiddenOnly = false;
+        m.groupKey = CATEGORY_GROUP_ALL;
+        m.languageKey = OvelaCore.CATEGORY_ALL_FACET;
+        m.qualityKey = OvelaCore.CATEGORY_ALL_FACET;
+        m.confirm = false;
+        m.status = '';
+        m.focusAfter = 'tab:' + m.kind;
+        renderBlockedCategorySettings();
+      });
+    });
+
+    var search = section.querySelector('#v07CategorySearch');
+    if (search) {
+      search.addEventListener('input', function () {
+        m.query = search.value;
+        renderCategoryManagerRows(section);
       });
     }
 
-    bindBlock('movies', 'v07BlockMoviesSelect', 'v07BlockMoviesButton');
-    bindBlock('series', 'v07BlockSeriesSelect', 'v07BlockSeriesButton');
+    renderCategoryManagerFilters(section);
+    renderCategoryManagerActions(section);
+    renderCategoryManagerRows(section);
+    renderCategoryManagerFooter(section);
 
-    Array.prototype.forEach.call(section.querySelectorAll('[data-v07-unblock-kind]'), function (button) {
-      button.addEventListener('click', function () {
-        var kind = String(button.getAttribute('data-v07-unblock-kind') || '');
-        var id = String(button.getAttribute('data-v07-unblock-id') || '');
-        var name = categoryNameById(kind, id);
-        setProviderCategoryHidden(kind, id, false);
-        App.toast('Unblocked ' + name);
-        patchSettings();
-        setTimeout(function () {
-          var target = document.getElementById(kind === 'movies' ? 'v07BlockMoviesSelect' : 'v07BlockSeriesSelect');
-          if (target) target.focus();
-        }, 0);
-      });
-    });
+    if (m.focusAfter) {
+      var focus = m.focusAfter;
+      m.focusAfter = null;
+      managerFocus(section, focus.indexOf('tab:') === 0
+        ? '[data-v07-manager-kind="' + focus.slice(4) + '"]'
+        : '#v07CategoryRows .v07-category-row');
+    }
+    if (window.OvelaNavigation) OvelaNavigation.invalidate();
   }
-
   function alphabeticalItems(items) {
     return (items || []).slice().sort(function (a, b) {
       var left = titleOf(a).toLowerCase();
@@ -894,7 +1443,7 @@
         }, 70);
       });
       input.addEventListener('keydown', function (event) {
-        if (isBackKey(event.keyCode)) {
+        if (isBackKey(event.keyCode, event.target)) {
           event.preventDefault();
           event.stopImmediatePropagation();
           closeSearchPopup(true);
@@ -905,7 +1454,7 @@
     overlay.addEventListener('click', function (event) {
       if (event.target === overlay) closeSearchPopup(true);
     });
-    if (window.XtreamlyTVNavigation) XtreamlyTVNavigation.invalidate();
+    if (window.OvelaNavigation) OvelaNavigation.invalidate();
     setTimeout(function () {
       if (input) {
         try { input.focus({ preventScroll:true }); }
@@ -999,7 +1548,7 @@
         activateCategoryWheel();
       });
     }
-    if (window.XtreamlyTVNavigation) XtreamlyTVNavigation.invalidate();
+    if (window.OvelaNavigation) OvelaNavigation.invalidate();
   }
 
   function moveCategoryWheel(delta) {
@@ -1198,7 +1747,7 @@ function mediaWindow(kind, items, index) {
   }
 
 
-  var MEDIA_CACHE_STORAGE_KEY = 'xtreamlytv.media-cache.v1';
+  var MEDIA_CACHE_STORAGE_KEY = 'io.github.speyll.ovela.media-cache.v1';
   var MEDIA_CACHE_MAX_CHARS = 1800000;
   var MEDIA_CACHE_LIMITS = { movie:60, series:8 };
   var MEDIA_CACHE_TTL = { movie:7 * 24 * 60 * 60 * 1000, series:3 * 24 * 60 * 60 * 1000 };
@@ -1215,7 +1764,7 @@ function mediaWindow(kind, items, index) {
 
   function mediaCacheScope() {
     if (!App.api || App.demo) return 'demo';
-    return window.XtreamlyCore.providerKey(App.api);
+    return window.OvelaCore.providerKey(App.api);
   }
 
   function mediaCacheLoad() {
@@ -1419,7 +1968,7 @@ function mediaWindow(kind, items, index) {
     V.artworkImageCache[url] = image;
     V.artworkImageOrder.push(url);
 
-    while (V.artworkImageOrder.length > 18) {
+    while (V.artworkImageOrder.length > 100) {
       var evicted = V.artworkImageOrder.shift();
       if (evicted && evicted !== url) delete V.artworkImageCache[evicted];
     }
@@ -1477,7 +2026,7 @@ function setRootCanvasBackdrop(kind, url) {
 
   // The packaged Home image is intentionally local; provider URL validation
   // otherwise only accepts HTTP(S) and image data URLs.
-  url = url === HOME_LIVE_BACKDROP ? HOME_LIVE_BACKDROP : artworkUrl(url);
+  url = url === HOME_LIVE_BACKDROP ? HOME_LIVE_BACKDROP : backdropArtworkUrl(url);
   if (!url) {
     primary.style.backgroundImage = '';
     primary.classList.remove('is-visible');
@@ -1533,7 +2082,7 @@ function applyMediaBackdrop(kind, url, generation) {
   /* Browse artwork is rendered at #app level so it can fade continuously
      through the navigation boundary instead of being clipped by .main. */
   setRootCanvasBackdrop(kind, url);
-  V.backdropUrl[kind] = artworkUrl(url) || '';
+  V.backdropUrl[kind] = backdropArtworkUrl(url) || '';
 }
 
 function queueMediaBackdrop(kind, item, rich) {
@@ -1854,7 +2403,7 @@ function renderMediaRail(kind, focus) {
     var focusTarget = rail.querySelector('[data-v07-media-index="' + index + '"]');
     if (focusTarget) focusTarget.focus();
   }
-  if (window.XtreamlyTVNavigation) XtreamlyTVNavigation.invalidate();
+  if (window.OvelaNavigation) OvelaNavigation.invalidate();
 }
 
 function updateMediaCatalog(kind) {
@@ -1866,7 +2415,7 @@ function updateMediaCatalog(kind) {
     App.currentFilteredItems[kind] = items;
 
     var count = document.querySelector('.result-count');
-    if (count) count.textContent = items.length.toLocaleString() + ' ' + config.plural;
+    if (count) count.textContent = items.length.toLocaleString() + ' ' + (items.length === 1 ? (config.singular || config.plural) : config.plural);
 
     App.destroyVirtualGrid();
     var oldKey = V.selectedKey[kind];
@@ -1900,6 +2449,74 @@ function updateMediaCatalog(kind) {
     if (App.pendingCatalogFirstFocus && App.pendingCatalogFirstFocus[kind]) {
       App.pendingCatalogFirstFocus[kind] = false;
       renderMediaRail(kind, true);
+    }
+  }
+
+  function renderCatalog(kind) {
+    stopTimeline();
+    hideRootMediaBackdrop();
+    if (kind === 'series' && !App.seriesCategories.length && App.seriesDiscovery === 'idle') {
+      App.ensureSeriesDiscovery(false);
+    }
+
+    var config = App.catalogConfig(kind);
+    var type = typeForKind(kind);
+    var categories = categoriesWithVirtuals(kind);
+    if (categories.length && categories[0].category_id === '__favorites__' && !stateFavoritesForType(type).length) {
+      categories.shift();
+    }
+    var active = ensureActiveCategory(kind, categories);
+    var activeCategory = categories.find(function (category) { return String(category.category_id) === String(active); });
+    /* updateCatalogGrid() consumes this flag synchronously when the category
+       is already cached. Capture the original intent first; otherwise the
+       final focusActive() below pulls focus back out of the content grid. */
+    var focusFirstRequested = !!(App.pendingCatalogFirstFocus && App.pendingCatalogFirstFocus[kind]);
+    var view = document.getElementById('view');
+    if (!view) return;
+
+    App.destroyCategoryRail();
+    App.destroyVirtualGrid();
+    view.innerHTML =
+      '<div class="library-layout ovela-catalog catalog-' + kind + '">' +
+        '<aside id="categoryList" class="category-list ovela-category-list" aria-label="' + esc(config.plural) + ' categories"></aside>' +
+        '<section class="library-browser ovela-catalog-browser">' +
+          '<div class="ovela-catalog-head">' +
+            '<div><h2>' + esc(activeCategory ? activeCategory.category_name : config.plural) + '</h2>' +
+            '<span class="result-count">0 ' + esc(config.plural) + '</span></div>' +
+            '<input id="catalogSearch" class="search-box focusable ovela-catalog-search" placeholder="Search loaded ' + esc(config.plural) + '" value="' + esc(App.searchText[kind] || '') + '">' +
+          '</div>' +
+          '<div id="catalogStatus" class="catalog-status"></div>' +
+          '<div id="catalogGrid" class="' + config.gridClass + ' ovela-catalog-grid"></div>' +
+        '</section>' +
+      '</div>';
+
+    App.setupCategoryRail(kind, categories, active);
+
+    var search = document.getElementById('catalogSearch');
+    if (search) {
+      search.addEventListener('input', function () {
+        App.searchText[kind] = search.value;
+        clearTimeout(App.searchTimer);
+        App.searchTimer = setTimeout(function () { App.updateCatalogGrid(kind); }, 140);
+      });
+    }
+
+    var virtual = virtualItems(kind, active);
+    if (virtual !== null) {
+      App.currentItems[kind] = App.normalizeCatalogItems(kind, virtual);
+      App.indexItems(kind, App.currentItems[kind]);
+      App.updateCatalogGrid(kind);
+    } else if (App.catalogCache[kind] && App.catalogCache[kind][active]) {
+      App.currentItems[kind] = App.catalogCache[kind][active];
+      App.updateCatalogGrid(kind);
+    } else if (active) {
+      App.loadCategory(kind, active).catch(function () {});
+    } else {
+      App.showCatalogError(kind, 'No ' + config.plural + ' categories were returned by this provider.');
+    }
+
+    if (!focusFirstRequested && App.categoryRail && App.categoryRail.focusActive) {
+      App.categoryRail.focusActive();
     }
   }
 
@@ -2171,7 +2788,7 @@ function updateMediaCatalog(kind) {
       });
     });
 
-    if (window.XtreamlyTVNavigation) XtreamlyTVNavigation.invalidate();
+    if (window.OvelaNavigation) OvelaNavigation.invalidate();
     if (focus || restoreIndex !== null) {
       var targetIndex = focus ? V.liveIndex : restoreIndex;
       var target = host.querySelector('[data-v07-live-index="' + targetIndex + '"]');
@@ -2200,7 +2817,7 @@ function updateMediaCatalog(kind) {
     var items = App.filteredCatalogItems('live');
     App.currentFilteredItems.live = items;
     var count = document.querySelector('.result-count');
-    if (count) count.textContent = items.length.toLocaleString() + ' channels';
+    if (count) count.textContent = items.length.toLocaleString() + (items.length === 1 ? ' channel' : ' channels');
     var liveCount = document.getElementById('v07LiveChannelCount');
     if (liveCount) liveCount.textContent = items.length.toLocaleString() + (items.length === 1 ? ' CHANNEL' : ' CHANNELS');
 
@@ -2247,8 +2864,9 @@ function updateMediaCatalog(kind) {
     stopTimeline();
     refreshTimeline();
     V.timelineTimer = setInterval(function () {
-      if (App.currentView !== 'live') {
-        stopTimeline();
+      // Do not keep rebuilding the guide while the player owns the screen.
+      if (App.currentView !== 'live' || App.playerOpen) {
+        if (App.currentView !== 'live') stopTimeline();
         return;
       }
       refreshTimeline();
@@ -2326,93 +2944,9 @@ function updateMediaCatalog(kind) {
     return { item:visualItem, type:visualType };
   }
 
-  function homeBackdropFor(item, type) {
-    if (type === 'live') return HOME_LIVE_BACKDROP;
-    return backdropImageOf(item);
-  }
-
-  function homeBackdropHtml(backdrop) {
-    return '<div class="v07-home-backdrop" id="v07HomeBackdrop"></div>';
-  }
-
-  function homeHeroTypeLabel(type) {
-    if (type === 'movie') return 'MOVIE';
-    if (type === 'series') return 'SERIES';
-    if (type === 'episode') return 'SERIES';
-    return 'LIVE TV';
-  }
-
-  function homeHeroArtHtml(item, type) {
-    var visual = homeVisualSource(item, type);
-    if (!visual.item) return '<div class="v07-home-hero-art v07-home-hero-art--empty"><span>TV</span></div>';
-    if (visual.type === 'live') {
-      return '<div class="v07-home-hero-art v07-home-hero-art--live">' + logoHtml(visual.item) + '</div>';
-    }
-    return '<div class="v07-home-hero-art v07-home-hero-art--poster">' +
-      posterHtml(visual.item, visual.type, 'v07-home-hero-poster') + '</div>';
-  }
-
-  function homeCard(item, type, row) {
-    var id = idOf(item, type);
-    var label = titleOf(item);
-    if (type === 'live') {
-      return '<button class="v07-home-channel focusable" aria-label="' + esc(label) + '" title="' + esc(label) + '" ' +
-        'data-home-row="' + row + '" data-content-type="live" data-content-id="' + esc(id) + '">' +
-        logoHtml(item) + '<span>' + esc(label) + '</span></button>';
-    }
-    return '<button class="v07-home-poster focusable" aria-label="' + esc(label) + '" title="' + esc(label) + '" ' +
-      'data-home-row="' + row + '" data-content-type="' + esc(type) + '" data-content-id="' + esc(id) + '">' +
-      posterHtml(item, type, 'v07-home-poster-art') + '</button>';
-  }
-
-  function homeRow(title, items, type, row) {
-    if (!items.length) return '';
-    var posterRow = type === 'movie' || type === 'series';
-    var limit = posterRow ? 7 : 6;
-    return '<section class="v07-home-row-section' + (posterRow ? ' v07-home-row-section--poster' : ' v07-home-row-section--live') + '">' +
-      '<h3>' + esc(title) + '</h3><div class="v07-home-row' + (posterRow ? ' v07-home-row--poster' : ' v07-home-row--live') + '">' +
-      items.slice(0, limit).map(function (item) { return homeCard(item, type, row); }).join('') +
-      '</div></section>';
-  }
-
   function resolveRecentType(item) {
     var type = Store.inferType ? Store.inferType(item) : item.content_type;
     return type || 'live';
-  }
-
-  function playHomeFeatured(item, type) {
-    if (!item) return;
-    if (type === 'live') App.playMedia(item, 'live', [item]);
-    else if (type === 'movie') App.playMedia(item, 'movie');
-    else if (type === 'episode') App.playMedia(item, 'episode', [], item.parent_series || null);
-    else if (type === 'series') App.openSeriesDetail(item);
-  }
-
-  function applyHomeHeroArtwork(featured, featuredType, richVisual) {
-    if (App.currentView !== 'home') return;
-    var visual = richVisual ? { item:richVisual, type:featuredType === 'episode' ? 'series' : featuredType } : homeVisualSource(featured, featuredType);
-    var backdrop = homeBackdropFor(visual.item, visual.type);
-    var artEl = document.getElementById('v07HomeHeroArt');
-    setRootCanvasBackdrop('home', backdrop || HOME_LIVE_BACKDROP);
-    if (artEl && visual.item) {
-      artEl.innerHTML = homeHeroArtHtml(visual.item, visual.type);
-    }
-    if (backdrop && /^https?:\/\//i.test(backdrop)) preloadArtwork(backdrop);
-    var poster = posterImageOf(visual.item, visual.type);
-    if (poster) preloadArtwork(poster);
-  }
-
-  function hydrateHomeFeatured(featured, featuredType) {
-    if (!featured) return;
-    var home = document.querySelector('.v07-home');
-    if (featuredType === 'movie') {
-      getMovieRich(featured).then(function (rich) {
-        if (App.currentView !== 'home' || document.querySelector('.v07-home') !== home) return;
-        applyHomeHeroArtwork(featured, featuredType, rich);
-      });
-      return;
-    }
-    applyHomeHeroArtwork(featured, featuredType);
   }
 
 
@@ -2466,11 +3000,45 @@ function bindHomeFocusScrolling(home) {
   });
 }
 
+  function uniqueHomeItems(items, type) {
+    var seen = {};
+    return (items || []).filter(function (item) {
+      if (!item) return false;
+      var id = idOf(item, type);
+      if (!id || seen[id]) return false;
+      seen[id] = true;
+      return true;
+    });
+  }
+
+  function ovelaHomeLiveSection(title, items) {
+    if (!items.length) return '';
+    return '<section class="section v07-home-row-section ovela-home-live-section"><div class="section-head"><h2>' + esc(title) + '</h2><span class="section-meta">' + items.length + (items.length === 1 ? ' channel' : ' channels') + '</span></div><div class="mixed-row">' +
+      items.slice(0, 8).map(function (item) { return App.channelTileHtml(item); }).join('') +
+      '</div></section>';
+  }
+
+  function ovelaHomePosterSection(title, items, type) {
+    if (!items.length) return '';
+    if (type === 'mixed') {
+      // Mixed section: items can be movies or series, render each with correct type
+      return '<section class="section v07-home-row-section"><div class="section-head"><h2>' + esc(title) + '</h2><span class="section-meta">' + items.length + (items.length === 1 ? ' title' : ' titles') + '</span></div><div class="poster-row">' +
+        items.slice(0, 10).map(function (item) {
+          var itemType = resolveRecentType(item);
+          return App.posterCardHtml(item, itemType);
+        }).join('') +
+        '</div></section>';
+    }
+    return App.posterSection(title, items.slice(0, 8), type).replace('<section class="section"', '<section class="section v07-home-row-section"');
+  }
+
   function renderHome() {
     stopTimeline();
     var view = document.getElementById('view');
     if (!view) return;
     warmPersistentArtwork();
+    // Home is content-first: no featured hero, no backdrop, no promotional copy.
+    setRootCanvasBackdrop('home', null);
 
     var recent = (App.state && App.state.recent || []).filter(function (item) {
       var type = resolveRecentType(item);
@@ -2479,19 +3047,7 @@ function bindHomeFocusScrolling(home) {
       if (type === 'episode') return !itemHiddenByCategory(item.parent_series || item, 'series');
       return true;
     });
-    var featured = recent[0] || (firstVisibleLoadedItem('movies') || firstVisibleLoadedItem('live') || firstVisibleLoadedItem('series'));
-    var featuredType = featured ? resolveRecentType(featured) : 'live';
-    var featuredVisual = homeVisualSource(featured, featuredType);
-    // Home should retain its branded Live TV canvas while content is still
-    // loading or a new account has no watch history yet.
-    var heroBackdrop = featured ? homeBackdropFor(featuredVisual.item, featuredVisual.type) : HOME_LIVE_BACKDROP;
-    setRootCanvasBackdrop('home', heroBackdrop);
-    var heroDescription = featured ? (descriptionOf(featuredVisual.item) || descriptionOf(featured) || 'Continue where you left off.') : 'Choose Live TV, Movies, or Series from the navigation above.';
-    var heroTitle = featured ? titleOf(featured) : 'Your TV, one remote away';
-    var heroMeta = '';
-    if (featured && featuredVisual.type !== 'live') heroMeta = metaChips(featuredVisual.item, featuredVisual.type);
-
-    var recentLive = recent.filter(function (item) { return resolveRecentType(item) === 'live'; });
+    var recentLive = recent.filter(function (item) { return resolveRecentType(item) === 'live'; }).slice(0, 8);
     var recentMovies = recent.filter(function (item) { return resolveRecentType(item) === 'movie'; });
     var recentSeries = [];
     var seenSeries = {};
@@ -2505,63 +3061,95 @@ function bindHomeFocusScrolling(home) {
       recentSeries.push(homeVisualSource(series, 'series').item);
     });
 
+    // Separate in-progress (has playback progress) from recently watched
+    var inProgressMovies = [];
+    var inProgressSeries = [];
+    var watchedMovies = [];
+    var watchedSeries = [];
+    var progressStore = window.OvelaStore || window.TVeeStore;
+    recentMovies.forEach(function (item) {
+      var id = idOf(item, 'movie');
+      var progress = progressStore && progressStore.getProgress ? progressStore.getProgress('movie', id) : null;
+      if (progress && progress.seconds > 0 && progress.duration && progress.seconds < progress.duration * 0.95) {
+        inProgressMovies.push(item);
+      } else {
+        watchedMovies.push(item);
+      }
+    });
+    recentSeries.forEach(function (item) {
+      var id = idOf(item, 'series');
+      var progress = progressStore && progressStore.getProgress ? progressStore.getProgress('series', id) : null;
+      if (progress && progress.seconds > 0 && progress.duration && progress.seconds < progress.duration * 0.95) {
+        inProgressSeries.push(item);
+      } else {
+        watchedSeries.push(item);
+      }
+    });
+
+    // Combine in-progress first, then recently watched, cap at 10 total
+    var continueWatching = inProgressMovies.concat(inProgressSeries).concat(watchedMovies).concat(watchedSeries).slice(0, 10);
+
     /* Parent-series objects embedded in episode recents are not guaranteed to
        have been loaded into a catalog cache yet. Register the Home objects so
        the existing resolveItem/openContent path remains deterministic. */
     if (App.itemLookup) {
       recentLive.forEach(function (item) { App.itemLookup['live:' + idOf(item, 'live')] = item; });
-      recentMovies.forEach(function (item) { App.itemLookup['movie:' + idOf(item, 'movie')] = item; });
-      recentSeries.forEach(function (item) { App.itemLookup['series:' + idOf(item, 'series')] = item; });
+      continueWatching.forEach(function (item) {
+        var type = resolveRecentType(item);
+        if (type === 'movie') App.itemLookup['movie:' + idOf(item, 'movie')] = item;
+        else if (type === 'series') App.itemLookup['series:' + idOf(item, 'series')] = item;
+      });
     }
 
-    recentMovies.slice(0, 7).forEach(function (item) { preloadArtwork(posterImageOf(item, 'movie')); });
-    recentSeries.slice(0, 7).forEach(function (item) { preloadArtwork(posterImageOf(item, 'series')); });
-    recentLive.slice(0, 6).forEach(function (item) { preloadArtwork(posterImageOf(item, 'live')); });
-
-    var row = 1;
-    var rowsHtml = '';
-    if (recentLive.length) rowsHtml += homeRow('Continue Watching Live TV', recentLive, 'live', row++);
-    if (recentMovies.length) rowsHtml += homeRow('Continue Watching Movies', recentMovies, 'movie', row++);
-    if (recentSeries.length) rowsHtml += homeRow('Continue Watching Series', recentSeries, 'series', row++);
-
-    view.innerHTML =
-      '<div class="v07-home">' +
-        '<section class="v07-home-hero">' +
-          homeBackdropHtml(heroBackdrop) +
-          '<div class="v07-home-scrim"></div>' +
-          '<div class="v07-home-hero-inner">' +
-            '<div id="v07HomeHeroArt">' + homeHeroArtHtml(featuredVisual.item, featuredVisual.type) + '</div>' +
-            '<div class="v07-home-copy">' +
-              '<div class="v07-home-kicker">LAST PLAYED' + (featured ? ' &#8226; ' + homeHeroTypeLabel(featuredType) : '') + '</div>' +
-              '<h2>' + esc(heroTitle) + '</h2>' +
-              (heroMeta ? '<div class="v07-home-meta v07-meta-row">' + heroMeta + '</div>' : '') +
-              '<p>' + esc(heroDescription) + '</p>' +
-              (featured ? '<button class="primary-button focusable" data-home-row="0" id="v07HomeWatch">▶ ' +
-                esc(featuredType === 'series' ? 'View Episodes' : (featuredType === 'live' ? 'Resume Live TV' : 'Resume')) + '</button>' : '') +
-            '</div>' +
-          '</div>' +
-        '</section>' +
-        '<div class="v07-home-scroll" id="v07HomeScroll">' + rowsHtml + '</div>' +
-      '</div>';
-
-    var watch = document.getElementById('v07HomeWatch');
-    if (watch) watch.addEventListener('click', function () { playHomeFeatured(featured, featuredType); });
-
-    Array.prototype.forEach.call(view.querySelectorAll('[data-content-type][data-content-id]'), function (button) {
-      button.addEventListener('click', function () {
-        var type = button.dataset.contentType;
-        var item = App.resolveItem(type, button.dataset.contentId);
-        if (item) App.openContent(item, type);
-      });
+    continueWatching.slice(0, 10).forEach(function (item) {
+      var type = resolveRecentType(item);
+      preloadArtwork(posterImageOf(item, type === 'movie' ? 'movie' : 'series'));
     });
+    recentLive.forEach(function (item) { preloadArtwork(posterImageOf(item, 'live')); });
 
+    var favorites = (App.state.favorites || []).filter(function (item) {
+      var type = resolveRecentType(item);
+      if (type === 'movie') return !itemHiddenByCategory(item, 'movie');
+      if (type === 'series') return !itemHiddenByCategory(item, 'series');
+      if (type === 'episode') return !itemHiddenByCategory(item.parent_series || item, 'series');
+      return true;
+    }).slice(0, 10);
+    var favoriteLive = favorites.filter(function (item) { return resolveRecentType(item) === 'live'; });
+    var favoriteMovies = favorites.filter(function (item) { return resolveRecentType(item) === 'movie'; });
+    var favoriteSeries = uniqueHomeItems(favorites.map(function (item) {
+      var type = resolveRecentType(item);
+      return type === 'episode' && item.parent_series ? item.parent_series : (type === 'series' ? item : null);
+    }).filter(function (item) { return item; }), 'series');
+
+    var rowsHtml = '';
+    if (continueWatching.length) {
+      rowsHtml += ovelaHomePosterSection('Continue watching', continueWatching, 'mixed');
+    }
+    if (favorites.length) {
+      rowsHtml += ovelaHomePosterSection('Favourite movies', favoriteMovies, 'movie');
+      rowsHtml += ovelaHomePosterSection('Favourite series', favoriteSeries, 'series');
+      rowsHtml += ovelaHomeLiveSection('Favourite channels', favoriteLive);
+    }
+    if (recentLive.length) {
+      rowsHtml += ovelaHomeLiveSection('Recent Live TV', recentLive);
+    }
+    if (!continueWatching.length && !favorites.length && !recentLive.length) {
+      rowsHtml += '<p class="ovela-home-empty">Start with Live TV, Movies or Series. Your recent channels and in-progress titles will appear here.</p>';
+    }
+
+    view.innerHTML = '<div class="v07-home ovela-home"><div class="v07-home-scroll" id="v07HomeScroll">' + rowsHtml + '</div></div>';
+    App.bindContentCards();
+    App.annotateHomeNavigation();
     bindHomeFocusScrolling(view.querySelector('.v07-home'));
-    hydrateHomeFeatured(featured, featuredType);
 
-    if (window.XtreamlyTVNavigation) {
-      XtreamlyTVNavigation.invalidate();
-      if (watch) setTimeout(function () { watch.focus(); }, 0);
-      else XtreamlyTVNavigation.focusFirst('.v07-home .focusable');
+    if (window.OvelaNavigation) {
+      OvelaNavigation.invalidate();
+      /* A fresh install, or a cleared history, has no rail to focus. Leaving
+         focus on <body> gave the D-pad no visible starting point, so fall back
+         to the top navigation instead of rendering a promotional shortcut row
+         (Home stays content-first). */
+      if (view.querySelector('.ovela-home .focusable')) OvelaNavigation.focusFirst('.ovela-home .focusable');
+      else focusCurrentTopNav();
     }
   }
 
@@ -2590,7 +3178,7 @@ function bindHomeFocusScrolling(home) {
       App.toast(checkbox.checked ? 'Favorites will sort alphabetically' : 'Manual favorite order enabled');
       patchFavoriteAutoSortUi();
     });
-    if (window.XtreamlyTVNavigation) XtreamlyTVNavigation.invalidate();
+    if (window.OvelaNavigation) OvelaNavigation.invalidate();
   }
 
   function patchSettings() {
@@ -2602,7 +3190,7 @@ function bindHomeFocusScrolling(home) {
 
     var section = document.createElement('section');
     section.className = 'settings-card v07-favorite-settings';
-    section.innerHTML = '<h3>Favorites & Lists</h3><p>Favorites now live inside each media category wheel. Your v0.6 custom lists are preserved and appear there too.</p><button id="v07ManageFavorites" class="secondary-button focusable">Manage favorite lists</button>';
+    section.innerHTML = '<h3>Favorites & Lists</h3><p>Favorites now live inside each media catalog. Your custom lists are preserved and appear there too.</p><button id="v07ManageFavorites" class="secondary-button focusable">Manage favorite lists</button>';
     grid.insertBefore(section, grid.firstChild);
     document.getElementById('v07ManageFavorites').addEventListener('click', function () {
       App.favoriteMode = 'home';
@@ -2613,7 +3201,13 @@ function bindHomeFocusScrolling(home) {
     });
 
     renderBlockedCategorySettings();
-    if (window.XtreamlyTVNavigation) XtreamlyTVNavigation.invalidate();
+    if (window.OvelaNavigation) {
+      OvelaNavigation.invalidate();
+      /* The Favorites & Lists card above was just inserted, so the focus that
+         legacy renderSettings placed on the provider card is no longer the top
+         of the page. Start Settings where the viewer expects it. */
+      OvelaNavigation.focusFirst('.settings-grid .focusable');
+    }
   }
 
   function focusCurrentTopNav() {
@@ -2689,6 +3283,68 @@ function bindHomeFocusScrolling(home) {
     else renderLiveWindow(true);
   }
 
+  function focusCatalogContent() {
+    var grid = App.virtualGrid;
+    if (grid && grid.items && grid.items.length) {
+      grid.focusIndex(0);
+      return true;
+    }
+    if (App.currentView === 'live') focusLiveStation();
+    else if (App.currentView === 'movies' || App.currentView === 'series') focusMediaPoster(App.currentView);
+    return false;
+  }
+
+  function focusCatalogSearch() {
+    var search = document.getElementById('catalogSearch');
+    if (!search) return false;
+    search.focus();
+    return true;
+  }
+
+  /* Every catalog grid reserves One clear boundary direction:
+     Left column -> category rail; first row -> search; last row/right edge
+     stay put. Interior movement remains VirtualGrid's job. */
+  function handleCatalogGridBoundary(event, active) {
+    if (!active || !active.dataset || active.dataset.virtualIndex === undefined) return false;
+    if (active.closest && !active.closest('#catalogGrid')) return false;
+    var kind = App.currentView;
+    if (kind !== 'live' && kind !== 'movies' && kind !== 'series') return false;
+
+    var grid = App.virtualGrid;
+    if (!grid || grid.destroyed) return false;
+    var columns = Math.max(1, Number(grid.columns || 1));
+    var index = Number(active.dataset.virtualIndex);
+    if (!isFinite(index)) return false;
+
+    if (event.keyCode === KEY.LEFT && index % columns === 0) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      focusCategory();
+      return true;
+    }
+
+    if (event.keyCode === KEY.UP && index - columns < 0) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!focusCatalogSearch()) focusCategory();
+      return true;
+    }
+
+    if (event.keyCode === KEY.RIGHT && (index % columns === columns - 1 || index + 1 >= grid.items.length)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return true;
+    }
+
+    if (event.keyCode === KEY.DOWN && index + columns >= grid.items.length) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return true;
+    }
+
+    return false;
+  }
+
   function visibleNavItems() {
     return Array.prototype.filter.call(document.querySelectorAll('.nav-item'), function (element) {
       return element.offsetWidth > 0 && element.offsetHeight > 0;
@@ -2705,8 +3361,25 @@ function bindHomeFocusScrolling(home) {
   }
 
 
-  function isBackKey(code) {
-    return code === KEY.BACK || code === KEY.ESC || code === KEY.BACKSPACE;
+  function isTextEntry(element) {
+    if (!element) return false;
+    if (element.isContentEditable) return true;
+    var tag = element.tagName;
+    if (tag === 'TEXTAREA') return true;
+    if (tag !== 'INPUT') return false;
+    var type = String(element.type || 'text').toLowerCase();
+    return type !== 'checkbox' && type !== 'radio' && type !== 'button' &&
+      type !== 'submit' && type !== 'reset';
+  }
+
+  function isBackKey(code, element) {
+    if (code === KEY.BACK || code === KEY.ESC) return true;
+    /* Backspace doubles as Back on some remotes, but inside a text field it
+       must delete the previous character. Routing it to the view's Back
+       handler made a typo in search or a provider field close the screen
+       instead of editing the value. */
+    if (code === KEY.BACKSPACE) return !isTextEntry(element || document.activeElement);
+    return false;
   }
 
   function favoriteFocusSnapshot(active) {
@@ -2771,6 +3444,40 @@ function bindHomeFocusScrolling(home) {
     return true;
   }
 
+
+  function movieDetailScrollHost(active) {
+    return active && active.closest ? active.closest('.detail-scroll') : document.querySelector('.detail-scroll');
+  }
+
+  function handleMovieDetailNavigation(event, active) {
+    if (!App.detail || App.detail.type !== 'movie' || !active) return false;
+    if (event.keyCode !== KEY.LEFT && event.keyCode !== KEY.RIGHT && event.keyCode !== KEY.UP && event.keyCode !== KEY.DOWN) return false;
+    if (!active.closest || !active.closest('.detail-actions')) return false;
+
+    var actions = Array.prototype.slice.call(
+      document.querySelectorAll('.detail-actions .focusable:not([disabled])')
+    ).filter(function (button) { return button.offsetWidth > 0 && button.offsetHeight > 0; });
+    var index = actions.indexOf(active);
+
+    if (event.keyCode === KEY.LEFT) {
+      if (index > 0) actions[index - 1].focus();
+      return true;
+    }
+    if (event.keyCode === KEY.RIGHT) {
+      if (index >= 0 && index < actions.length - 1) actions[index + 1].focus();
+      return true;
+    }
+    if (event.keyCode === KEY.UP) {
+      var host = movieDetailScrollHost(active);
+      if (host) host.scrollTop = 0;
+      return true;
+    }
+
+    /* There is no focusable content below the action row. Staying put is more
+       predictable than letting the generic spatial fallback leap into the top
+       navigation while a detail page is open. */
+    return true;
+  }
 
   function seriesDetailScrollHost(active) {
     return active && active.closest ? active.closest('.v07-series-detail-page') : document.querySelector('.v07-series-detail-page');
@@ -2876,9 +3583,14 @@ function bindHomeFocusScrolling(home) {
     var active = document.activeElement;
     if (!active) return;
 
-    /* Detail pages use the core return-state machinery. Do not let the v0.7
-       catalog BACK routing turn BACK into a jump to the category wheel. */
-    if (App.detail && isBackKey(event.keyCode)) return;
+    /* Detail pages use the core return-state machinery. Do not let the catalog
+       BACK routing turn BACK into a jump to the category rail. */
+    if (App.detail && isBackKey(event.keyCode, active)) return;
+    if (App.detail && App.detail.type === 'movie' && handleMovieDetailNavigation(event, active)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     if (App.detail && App.detail.type === 'series' && handleSeriesDetailNavigation(event, active)) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -2886,10 +3598,32 @@ function bindHomeFocusScrolling(home) {
     }
 
     if (V.searchOpen) {
-      if (isBackKey(event.keyCode)) {
+      if (isBackKey(event.keyCode, active)) {
         event.preventDefault();
         event.stopImmediatePropagation();
         closeSearchPopup(true);
+        return;
+      }
+      /* The search popover is modal: arrows must not reach the catalog behind
+         the dimmed backdrop. Up/Down move between the field and its Close
+         button; Left/Right remain caret movement inside the field. */
+      if (event.keyCode === KEY.UP || event.keyCode === KEY.DOWN) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        var popupInput = document.getElementById('v07SearchInput');
+        var popupClose = document.getElementById('v07SearchClose');
+        if (event.keyCode === KEY.UP && popupClose) popupClose.focus();
+        else if (event.keyCode === KEY.DOWN && popupInput) popupInput.focus();
+        return;
+      }
+      if (event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT) {
+        if (!active || active.id !== 'v07SearchInput') {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          var popupField = document.getElementById('v07SearchInput');
+          if (popupField) popupField.focus();
+        }
+        return;
       }
       return;
     }
@@ -2903,7 +3637,7 @@ function bindHomeFocusScrolling(home) {
       return;
     }
 
-    if (isBackKey(event.keyCode)) {
+    if (isBackKey(event.keyCode, active)) {
       if (App.currentView === 'movies' && active.closest && active.closest('.v07-hero-actions')) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -2927,6 +3661,8 @@ function bindHomeFocusScrolling(home) {
         }
       }
     }
+
+    if (handleCatalogGridBoundary(event, active)) return;
 
     if (active.classList && active.classList.contains('nav-item')) {
       if (event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT) {
@@ -2964,15 +3700,21 @@ function bindHomeFocusScrolling(home) {
 
     if (active.classList && active.classList.contains('category-button')) {
       if (event.keyCode === KEY.UP || event.keyCode === KEY.DOWN) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        moveCategoryWheel(event.keyCode === KEY.UP ? -1 : 1);
+        /* The category wheel is not the current catalog presentation; the
+           rendered rail owns Up/Down. Falling through lets CategoryRail's
+           capture handler move focus and scroll without a competing claim. */
+        if (V.categoryWheel) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          moveCategoryWheel(event.keyCode === KEY.UP ? -1 : 1);
+        }
         return;
       }
       if (event.keyCode === KEY.RIGHT || event.keyCode === KEY.ENTER) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        activateCategoryWheel();
+        if (V.categoryWheel) activateCategoryWheel();
+        else if (active.click) active.click();
         return;
       }
       if (event.keyCode === KEY.LEFT) {
@@ -3056,36 +3798,51 @@ function bindHomeFocusScrolling(home) {
     }
 
     if (active.dataset && active.dataset.homeRow !== undefined) {
-      var activeHomeRow = active.closest ? active.closest('.v07-home-row') : null;
-      var rowItems = activeHomeRow ? Array.prototype.filter.call(activeHomeRow.querySelectorAll('.focusable'), function (button) {
-        return button.offsetWidth > 0 && button.offsetHeight > 0;
-      }) : [];
+      /* annotateHomeNavigation() groups focusables by data-home-row, not by a
+         wrapper class: Home rows are .mixed-row / .poster-row inside a
+         .v07-home-row-section. Reading the row back from the annotation keeps
+         Left/Right aligned with whatever rail actually rendered. */
+      var homeRowNumber = Number(active.dataset.homeRow);
+      var rowItems = Array.prototype.filter.call(
+        document.querySelectorAll('#view [data-home-row]'),
+        function (button) {
+          return Number(button.dataset.homeRow) === homeRowNumber &&
+            button.classList.contains('focusable') &&
+            button.offsetWidth > 0 && button.offsetHeight > 0;
+        }
+      ).sort(function (a, b) {
+        return Number(a.dataset.homeColumn || 0) - Number(b.dataset.homeColumn || 0);
+      });
       var rowItemIndex = rowItems.indexOf(active);
 
       if (event.keyCode === KEY.LEFT || event.keyCode === KEY.RIGHT) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        if (event.keyCode === KEY.LEFT) {
-          if (rowItemIndex > 0) rowItems[rowItemIndex - 1].focus();
-          else focusCurrentTopNav();
-        } else if (rowItemIndex >= 0 && rowItemIndex < rowItems.length - 1) {
-          rowItems[rowItemIndex + 1].focus();
+        /* Stay on the edge rather than leaping to the top navigation from the
+           first card; Up is the documented way out of a Home rail. */
+        var nextRowItem = event.keyCode === KEY.LEFT ? rowItems[rowItemIndex - 1] : rowItems[rowItemIndex + 1];
+        if (nextRowItem) {
+          nextRowItem.focus();
+          if (nextRowItem.scrollIntoView) nextRowItem.scrollIntoView({ block:'nearest', inline:'nearest' });
         }
         return;
       }
       if (event.keyCode === KEY.UP) {
         var homeRow = Number(active.dataset.homeRow || 0);
-        var hasHeroWatch = !!document.getElementById('v07HomeWatch');
-        if ((hasHeroWatch && homeRow <= 1) || (!hasHeroWatch && homeRow <= 1)) {
+        var topRow = Infinity;
+        Array.prototype.forEach.call(document.querySelectorAll('#view [data-home-row]'), function (element) {
+          var value = Number(element.dataset.homeRow);
+          if (isFinite(value) && element.offsetWidth > 0 && element.offsetHeight > 0) topRow = Math.min(topRow, value);
+        });
+        /* Only the visually top-most Home row leaves for the top navigation.
+           Any row above the focused one is handled by moveHomeRow(), including
+           the Browse shortcuts that now sit between content rails. */
+        if (homeRow <= topRow) {
           event.preventDefault();
           event.stopImmediatePropagation();
-          if (hasHeroWatch) {
-            var watchButton = document.getElementById('v07HomeWatch');
-            if (watchButton) watchButton.focus();
-            else focusCurrentTopNav();
-          } else {
-            focusCurrentTopNav();
-          }
+          var watchButton = document.getElementById('v07HomeWatch');
+          if (watchButton) watchButton.focus();
+          else focusCurrentTopNav();
           return;
         }
       }
@@ -3127,15 +3884,16 @@ function bindHomeFocusScrolling(home) {
       if (event.keyCode === KEY.DOWN) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        if (App.currentView === 'live') focusLiveStation();
-        else focusMediaPoster(App.currentView);
+        focusCatalogContent();
         return;
       }
-      if (event.keyCode === KEY.UP || event.keyCode === KEY.LEFT) {
+      if (event.keyCode === KEY.UP) {
         event.preventDefault();
         event.stopImmediatePropagation();
         focusCurrentTopNav();
       }
+      /* Left/Right stay inside the text field so the caret can be moved while
+         editing a query; Up is the documented way back to the top bar. */
     }
   }
 
@@ -3156,7 +3914,7 @@ function bindHomeFocusScrolling(home) {
   }
 
   function seriesDetailBackdrop(detail, series) {
-    var captured = artworkUrl(detail && detail.heroBackdrop);
+    var captured = backdropArtworkUrl(detail && detail.heroBackdrop);
     if (captured) return captured;
     var snapshot = V.seriesDetailBrowseSnapshot;
     if (snapshot && detail && detail.item && String(idOf(snapshot, 'series')) !== String(idOf(detail.item, 'series'))) snapshot = null;
@@ -3168,7 +3926,7 @@ function bindHomeFocusScrolling(home) {
     var id = idOf(episode, 'episode');
     var progress = Store.getProgress ? Store.getProgress('episode', id) : null;
     var percent = progress && progress.duration ? Math.min(100, progress.seconds / progress.duration * 100) : 0;
-    var image = artworkUrl(episode && (episode.movie_image || episode.cover || episode.stream_icon));
+    var image = posterArtworkUrl(episode && (episode.movie_image || episode.cover || episode.stream_icon));
     var number = String(episode && (episode.episode_num || episode.episode || '') || '\u2022');
     var runtime = durationOf(episode);
     var description = descriptionOf(episode) || ('Episode ' + number);
@@ -3191,7 +3949,8 @@ function bindHomeFocusScrolling(home) {
 
   function openV07SeriesDetail(series) {
     var self = App;
-    var returnView = self.currentView === 'favorites' ? 'favorites' : 'series';
+    var origin = self.currentView;
+    var returnView = (origin === 'home' || origin === 'live' || origin === 'movies' || origin === 'series' || origin === 'favorites') ? origin : 'series';
     var returnState = self.captureNavigationState();
     self.rememberNavigationState(returnState);
     V.seriesDetailBrowseSnapshot = Object.assign({}, series || {});
@@ -3265,9 +4024,13 @@ function bindHomeFocusScrolling(home) {
     setRootCanvasBackdrop('series-detail', backdrop);
     if (backdrop) preloadArtwork(backdrop);
     preloadArtwork(posterImageOf(series, 'series'));
-    episodes.slice(0, 6).forEach(function (episode) { preloadArtwork(artworkUrl(episode && (episode.movie_image || episode.cover || episode.stream_icon))); });
+    episodes.slice(0, 6).forEach(function (episode) { preloadArtwork(posterArtworkUrl(episode && (episode.movie_image || episode.cover || episode.stream_icon))); });
     var active = document.activeElement;
-    var restoreId = active && active.id ? active.id : '';
+    /* The loading render has nothing to focus yet and falls back to the Back
+       button. Remembering that as a restore target made the loaded episode
+       list unreachable: every re-render put focus straight back on Back.
+       Action buttons are not content positions, so they are not restored. */
+    var restoreId = active && active.id && active.id !== 'closeSeries' && active.id !== 'favoriteSeries' ? active.id : '';
     var restoreSeason = active && active.dataset && active.dataset.season !== undefined ? String(active.dataset.season) : '';
 
     var backdropHtml = backdrop ?
@@ -3336,7 +4099,7 @@ function bindHomeFocusScrolling(home) {
     });
 
     App.bindEpisodeCards();
-    if (window.XtreamlyTVNavigation && XtreamlyTVNavigation.invalidate) XtreamlyTVNavigation.invalidate();
+    if (window.OvelaNavigation && OvelaNavigation.invalidate) OvelaNavigation.invalidate();
 
     if (restoreId) {
       var restore = document.getElementById(restoreId);
@@ -3406,29 +4169,28 @@ function bindHomeFocusScrolling(home) {
   }
 
   App.showCatalogLoading = function (kind, message) {
-    setCatalogActivity(message || 'Loading category…');
-    var count = document.querySelector('.result-count');
-    if (count && !count.textContent) count.textContent = 'Loading…';
-    if (kind === 'live') {
-      var liveCount = document.getElementById('v07LiveChannelCount');
-      if (liveCount) liveCount.textContent = 'LOADING…';
-    }
+    return legacy.showCatalogLoading.call(App, kind, message);
   };
 
   App.showCatalogError = function (kind, message) {
-    clearCatalogActivity();
     return legacy.showCatalogError.call(App, kind, message);
   };
 
+  var baseCatalogConfig = App.catalogConfig;
+  App.catalogConfig = function (kind) {
+    if (kind === 'live') {
+      // A flat, single-column channel list is faster to scan at TV distance
+      // than a grid of logo cards, and it matches the Android client.
+      return { type:'live', plural:'channels', singular:'channel', columns:1, visibleRows:7, rowHeight:64, gap:3, gridClass:'channel-list' };
+    }
+    return baseCatalogConfig.call(App, kind);
+  };
+
   App.renderCatalog = function (kind) {
-    if (kind === 'live') return renderLiveCatalog();
-    if (kind === 'movies' || kind === 'series') return renderMediaCatalog(kind);
-    return legacy.renderCatalog.call(App, kind);
+    return renderCatalog(kind);
   };
 
   App.updateCatalogGrid = function (kind) {
-    if (kind === 'live') return updateLiveGuide();
-    if (kind === 'movies' || kind === 'series') return updateMediaCatalog(kind);
     return legacy.updateCatalogGrid.call(App, kind);
   };
 

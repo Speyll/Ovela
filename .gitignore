@@ -2,6 +2,7 @@
 node_modules/
 .gradle/
 **/.gradle/
+**/.kotlin/
 
 # Build output
 dist/
@@ -48,4 +49,13 @@ test-results/
 .gradle-bootstrap/
 **/.gradle-bootstrap/
 
-.xtreamlytv-backups/
+.ovela-backups/
+# Local toolchains, evidence, and machine-local state
+.dev/
+
+# Unpacked brand reference assets (too large for history; see packages/brand/README.md)
+packages/brand/ovela-source-pack/
+
+# Packet captures and ad-hoc file backups (never source assets)
+*.pcap
+*.backup

@@ -2,10 +2,10 @@
 (function () {
   'use strict';
 
-  var Core = window.XtreamlyCore;
-  if (!Core) throw new Error('XtreamlyCore must load before store.js');
+  var Core = window.OvelaCore;
+  if (!Core) throw new Error('OvelaCore must load before store.js');
 
-  var KEY = 'xtreamlytv.state.v1';
+  var KEY = 'io.github.speyll.ovela.state.v1';
   var defaults = {
     credentials: null,
     activeAccount: '',
@@ -129,6 +129,51 @@
   }
 
   var state = load();
+  var PROGRESS_PERSIST_DELAY_MS = 1000;
+  var persistenceTimer = null;
+  var persistenceRevision = 0;
+  var persistedRevision = 0;
+
+  function markChanged() { persistenceRevision += 1; }
+
+  function clearPersistenceTimer() {
+    if (persistenceTimer !== null && typeof clearTimeout === 'function') clearTimeout(persistenceTimer);
+    persistenceTimer = null;
+  }
+
+  function persistState() {
+    clearPersistenceTimer();
+    if (persistenceRevision === persistedRevision) return true;
+    var progressKeys = Object.keys(state.progress);
+    if (progressKeys.length > 500) {
+      progressKeys.sort(function (a, b) { return Number(state.progress[b].updated_at || 0) - Number(state.progress[a].updated_at || 0); });
+      progressKeys.slice(500).forEach(function (key) { delete state.progress[key]; });
+    }
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+      persistedRevision = persistenceRevision;
+      return true;
+    } catch (error) {
+      if (window.dispatchEvent && typeof CustomEvent !== 'undefined') window.dispatchEvent(new CustomEvent('io.github.speyll.ovela-storage-error'));
+      return false;
+    }
+  }
+
+  function scheduleProgressPersist() {
+    markChanged();
+    if (persistenceTimer !== null) return;
+    if (typeof setTimeout !== 'function') {
+      persistState();
+      return;
+    }
+    persistenceTimer = setTimeout(function () {
+      persistenceTimer = null;
+      persistState();
+    }, PROGRESS_PERSIST_DELAY_MS);
+  }
+
+  function flushPersistence() { return persistState(); }
+
   var accountFields = ['favorites', 'favoriteGroups', 'favoriteGroupOrder', 'favoriteItemOrders', 'recent', 'progress'];
   var accountSettings = ['hiddenCatalogCategories', 'hiddenFavoriteGroupIds', 'favoriteSystemGroupOverrides'];
   function accountSnapshot() {
@@ -139,25 +184,46 @@
     return value;
   }
   function selectAccount(key) {
-    if (state.activeAccount === key) return;
+    if (state.activeAccount === key) return false;
     if (state.activeAccount) state.accounts[state.activeAccount] = accountSnapshot();
     var saved = state.accounts[key] || defaults;
     accountFields.forEach(function (field) { state[field] = clone(saved[field] || defaults[field]); });
     accountSettings.forEach(function (field) { delete state.settings[field]; if (saved.settings && saved.settings[field] !== undefined) state.settings[field] = clone(saved.settings[field]); });
     state.activeAccount = key;
+    return true;
   }
   function progressKey(type, id) { return String(type || 'movie') + ':' + String(id || ''); }
 
-  window.XtreamlyTVStore = window.TVeeStore = {
+  window.OvelaStore = window.TVeeStore = {
     getState: function () { return clone(state); },
-    saveCredentials: function (credentials) { selectAccount(Core.providerKey(credentials)); state.credentials = credentials; this.persist(); },
-    selectDemo: function () { selectAccount('demo'); this.persist(); },
-    clearCredentials: function () {
-      if (state.activeAccount) state.accounts[state.activeAccount] = accountSnapshot();
-      state.credentials = null;
+    saveCredentials: function (credentials) {
+      var changed = selectAccount(Core.providerKey(credentials));
+      if (JSON.stringify(credentials) !== JSON.stringify(state.credentials)) changed = true;
+      state.credentials = credentials;
+      if (changed) {
+        markChanged();
+        this.persist();
+      }
+    },
+    selectDemo: function () {
+      if (!selectAccount('demo')) return;
+      markChanged();
       this.persist();
     },
-    updateSettings: function (settings) { state.settings = Object.assign({}, state.settings, settings); this.persist(); },
+    clearCredentials: function () {
+      if (!state.credentials) return;
+      if (state.activeAccount) state.accounts[state.activeAccount] = accountSnapshot();
+      state.credentials = null;
+      markChanged();
+      this.persist();
+    },
+    updateSettings: function (settings) {
+      var changed = Object.keys(settings || {}).some(function (key) { return state.settings[key] !== settings[key]; });
+      if (!changed) return;
+      state.settings = Object.assign({}, state.settings, settings);
+      markChanged();
+      this.persist();
+    },
     isFavorite: function (type, id) {
       if (arguments.length === 1) { id = type; type = 'live'; }
       return state.favorites.some(function (item) {
@@ -182,6 +248,7 @@
         });
       } else state.favorites.unshift(normalizedItem(item, type));
       state.favorites = state.favorites.slice(0, 250);
+      markChanged();
       this.persist();
       return index < 0;
     },
@@ -200,6 +267,7 @@
         state.favoriteGroups = state.favoriteGroups.slice(0, 24);
         state.favoriteGroupOrder = normalizeGroupOrder((state.favoriteGroupOrder || []).concat(value.id), state.favoriteGroups);
       }
+      markChanged();
       this.persist();
       return clone(value);
     },
@@ -209,12 +277,21 @@
       state.favoriteGroups = state.favoriteGroups.filter(function (group) { return group.id !== id; });
       state.favoriteGroupOrder = normalizeGroupOrder((state.favoriteGroupOrder || []).filter(function (groupId) { return groupId !== id; }), state.favoriteGroups);
       if (state.favoriteItemOrders) delete state.favoriteItemOrders[id];
-      if (state.favoriteGroups.length !== before) this.persist();
-      return state.favoriteGroups.length !== before;
+      var changed = state.favoriteGroups.length !== before;
+      if (changed) {
+        markChanged();
+        this.persist();
+      }
+      return changed;
     },
     saveFavoriteGroupOrder: function (order) {
-      state.favoriteGroupOrder = normalizeGroupOrder(order, state.favoriteGroups);
-      this.persist();
+      var next = normalizeGroupOrder(order, state.favoriteGroups);
+      var changed = JSON.stringify(next) !== JSON.stringify(state.favoriteGroupOrder);
+      state.favoriteGroupOrder = next;
+      if (changed) {
+        markChanged();
+        this.persist();
+      }
       return clone(state.favoriteGroupOrder);
     },
     saveFavoriteItemOrder: function (groupId, order) {
@@ -231,8 +308,12 @@
         return true;
       }).slice(0, 250);
       state.favoriteItemOrders = state.favoriteItemOrders || {};
+      var changed = JSON.stringify(normalized) !== JSON.stringify(state.favoriteItemOrders[groupId] || []);
       state.favoriteItemOrders[groupId] = normalized;
-      this.persist();
+      if (changed) {
+        markChanged();
+        this.persist();
+      }
       return clone(normalized);
     },
     addRecent: function (item, type) {
@@ -243,49 +324,94 @@
       });
       state.recent.unshift(Object.assign(normalizedItem(item, type), { watched_at: Date.now() }));
       state.recent = state.recent.slice(0, 40);
+      markChanged();
       this.persist();
     },
     getProgress: function (type, id) { return clone(state.progress[progressKey(type, id)] || null); },
     saveProgress: function (type, id, seconds, duration) {
       if (!id || !isFinite(seconds) || seconds < 0) return;
       var key = progressKey(type, id);
-      if (duration && seconds >= duration - 30) delete state.progress[key];
-      else state.progress[key] = {
-        seconds: Math.floor(seconds),
-        duration: isFinite(duration) ? Math.floor(duration) : 0,
+      if (duration && seconds >= duration - 30) {
+        if (!Object.prototype.hasOwnProperty.call(state.progress, key)) return;
+        delete state.progress[key];
+        markChanged();
+        this.persist();
+        return;
+      }
+      var nextSeconds = Math.floor(seconds);
+      var nextDuration = isFinite(duration) ? Math.floor(duration) : 0;
+      var previous = state.progress[key];
+      if (previous && previous.seconds === nextSeconds && previous.duration === nextDuration) return;
+      state.progress[key] = {
+        seconds: nextSeconds,
+        duration: nextDuration,
         updated_at: Date.now()
       };
+      scheduleProgressPersist();
+    },
+    clearProgress: function (type, id) {
+      var key = progressKey(type, id);
+      if (!Object.prototype.hasOwnProperty.call(state.progress, key)) return;
+      delete state.progress[key];
+      markChanged();
       this.persist();
     },
-    clearProgress: function (type, id) { delete state.progress[progressKey(type, id)]; this.persist(); },
-    clearHistory: function () { state.recent = []; state.progress = {}; this.persist(); },
+    clearHistory: function () {
+      if (!state.recent.length && !Object.keys(state.progress).length) return;
+      state.recent = [];
+      state.progress = {};
+      markChanged();
+      this.persist();
+    },
     refreshArtwork: function (items, type) {
-      var byId = {};
-      (items || []).forEach(function (item) { byId[Core.itemId(item, type)] = item; });
-      var changed = false;
+      // Only favorites and recents can hold artwork from an earlier catalog
+      // load. Index those few saved items instead of every item in the
+      // category: a large provider returns tens of thousands of titles, and
+      // building an entry per title made loading a category noticeably slower
+      // on TV hardware even when there was nothing to refresh.
+      var saved = {};
+      var wanted = false;
       [state.favorites, state.recent].forEach(function (list) {
         list.forEach(function (item) {
           if (Core.inferType(item) !== type) return;
-          var fresh = byId[Core.itemId(item, type)];
-          if (!fresh) return;
+          var id = Core.itemId(item, type);
+          if (!id) return;
+          var copies = saved[id];
+          if (!copies) { copies = saved[id] = []; }
+          copies.push(item);
+          wanted = true;
+        });
+      });
+      if (!wanted) return;
+      var changed = false;
+      (items || []).forEach(function (fresh) {
+        var copies = saved[Core.itemId(fresh, type)];
+        if (!copies) return;
+        copies.forEach(function (item) {
           ['stream_icon', 'cover', 'cover_big', 'movie_image'].forEach(function (key) {
             if (fresh[key] && item[key] !== fresh[key]) { item[key] = fresh[key]; changed = true; }
           });
         });
       });
-      if (changed) this.persist();
-    },
-    persist: function () {
-      var keys = Object.keys(state.progress).sort(function (a, b) { return Number(state.progress[b].updated_at || 0) - Number(state.progress[a].updated_at || 0); });
-      keys.slice(500).forEach(function (key) { delete state.progress[key]; });
-      try { localStorage.setItem(KEY, JSON.stringify(state)); return true; }
-      catch (error) {
-        if (window.dispatchEvent && typeof CustomEvent !== 'undefined') window.dispatchEvent(new CustomEvent('xtreamlytv-storage-error'));
-        return false;
+      if (changed) {
+        markChanged();
+        this.persist();
       }
     },
-    reset: function () { state = clone(defaults); this.persist(); },
+    persist: persistState,
+    flush: flushPersistence,
+    reset: function () { state = clone(defaults); markChanged(); this.persist(); },
     inferType: Core.inferType,
     itemId: Core.itemId
   };
+
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('pagehide', flushPersistence);
+    window.addEventListener('beforeunload', flushPersistence);
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') flushPersistence();
+      });
+    }
+  }
 }());

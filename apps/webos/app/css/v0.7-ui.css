@@ -1,4 +1,4 @@
-﻿/* XtreamlyTV v0.7.0 webOS browsing UI.
+﻿/* Ovela v0.7.0 webOS browsing UI.
  * Release-owned styling for the v0.7 remote-first shell and catalog surfaces. */
 
 /* ---------- shell / top navigation ---------- */
@@ -311,7 +311,6 @@
   background-position:center;
   background-size:cover;
   opacity:.30;
-  filter:blur(3px) saturate(.92);
   transform:scale(1.035);
   transition:opacity .22s ease, background-image .22s ease;
 }
@@ -1365,7 +1364,7 @@
    v0.7.0 TV readability / webOS rendering pass
    ======================================================================== */
 
-/* The supplied XtreamlyTV asset is a horizontal wordmark, not a square icon.
+/* The supplied Ovela asset is a horizontal wordmark, not a square icon.
    Give it horizontal room instead of compressing it into a 70x70 box. */
 .sidebar .logo {
   left:42px !important;
@@ -3305,9 +3304,7 @@
 .catalog-movies .v07-hero-actions .secondary-button,
 .catalog-series .v07-hero-actions .secondary-button {
   border:1px solid rgba(255,255,255,.08) !important;
-  background:rgba(15,22,27,.54) !important;
-  -webkit-backdrop-filter:blur(7px);
-  backdrop-filter:blur(7px);
+  background:rgba(15,22,27,.78) !important;
 }
 .catalog-movies .v07-hero-actions .primary-button:focus,
 .catalog-movies .v07-hero-actions .secondary-button:focus,
@@ -5862,7 +5859,7 @@
   padding-right:8px !important;
 }
 
-/* === XtreamlyTV r30 nav-seamless-background START === */
+/* === Ovela r30 nav-seamless-background START === */
 /* Make the top navigation and upper content canvas one continuous dark field.
    There is deliberately no accent-colored ambience in the upper ~72% of the
    screen. Appearance color is reintroduced only near the lower edge. */
@@ -5888,9 +5885,9 @@
 .view {
   background-color:transparent !important;
 }
-/* === XtreamlyTV r30 nav-seamless-background END === */
+/* === Ovela r30 nav-seamless-background END === */
 
-/* === XtreamlyTV r31 media-wheel-unification START === */
+/* === Ovela r31 media-wheel-unification START === */
 /* Movies/Series retained an early media-specific category-wheel gradient with
    higher specificity than the later shared transparent wheel rules. Override
    those media-only selectors explicitly so Live TV, Movies, and Series use
@@ -5961,9 +5958,9 @@
   box-shadow:none !important;
   outline:0 !important;
 }
-/* === XtreamlyTV r31 media-wheel-unification END === */
+/* === Ovela r31 media-wheel-unification END === */
 
-/* === XtreamlyTV r33 top-nav-focus START === */
+/* === Ovela r33 top-nav-focus START === */
 /* r10 intentionally made the primary top nav text-only, but its per-view
    :focus selectors are more specific than the generic r32 rule. Match/exceed
    that specificity so transient focus uses the Appearance accent. */
@@ -5999,7 +5996,7 @@
   color:var(--text) !important;
   text-shadow:none !important;
 }
-/* === XtreamlyTV r33 top-nav-focus END === */
+/* === Ovela r33 top-nav-focus END === */
 
 /* ========================================================================
    v0.7.0 EPG overlap hardening

@@ -9,4 +9,4 @@ if (-not $Apk) { $Apk = "$Root\apps\android-tv\app\build\outputs\apk\debug\app-d
 if (-not (Test-Path $Apk)) { throw "APK not found at $Apk. Run scripts/build-android.ps1 first." }
 adb install -r $Apk
 if ($LASTEXITCODE -ne 0) { throw "adb install failed with exit code $LASTEXITCODE" }
-adb shell monkey -p com.github.xtreamlytv.androidtv 1
+adb shell monkey -p io.github.speyll.ovela 1

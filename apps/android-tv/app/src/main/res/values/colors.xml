@@ -1,3 +1,14 @@
 <resources>
-    <color name="xtreamlytv_icon_background">#071014</color>
+    <!-- Ovela shell colours. Keep in step with packages/design-tokens/tokens.json
+         (npm run tokens regenerates the Compose tokens; this file mirrors the
+         values the Android window/theme layer needs before Compose starts). -->
+    <color name="ovela_deep_charcoal">#0B0E10</color>
+    <color name="ovela_slate">#1E2328</color>
+    <color name="ovela_ivory">#FAF4EB</color>
+    <color name="ovela_gray">#A7A9AC</color>
+
+    <!-- Legacy aliases for backward compatibility -->
+    <color name="ovela_background">@color/ovela_deep_charcoal</color>
+    <color name="ovela_accent">@color/ovela_ivory</color>
+    <color name="ovela_icon_background">@color/ovela_slate</color>
 </resources>

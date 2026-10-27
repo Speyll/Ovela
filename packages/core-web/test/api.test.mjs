@@ -11,7 +11,7 @@ function createApi(fetch) {
   vm.createContext(context);
   vm.runInContext(readFileSync(resolve('packages/core-web/src/core.js'), 'utf8'), context);
   vm.runInContext(readFileSync(resolve('packages/core-web/src/api.js'), 'utf8'), context);
-  return new context.XtreamlyTVApi({ server: 'http://provider.test', username: 'u', password: 'p' }, {});
+  return new context.OvelaApi({ server: 'http://provider.test', username: 'u', password: 'p' }, {});
 }
 
 test('request timeout covers reading the response body', async () => {

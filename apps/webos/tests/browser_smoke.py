@@ -1,4 +1,4 @@
-"""Desktop smoke test for XtreamlyTV's demo and virtualized catalogs.
+"""Desktop smoke test for Ovela's demo and virtualized catalogs.
 
 Run from the repository root:
   python -m pip install -r apps/webos/tests/requirements.txt
@@ -69,10 +69,10 @@ def main() -> None:
         assert page.locator('.form-error').count() == 0
 
         # Re-rendering the login screen after a saved-provider failure must not focus a text field.
-        page.evaluate("XtreamlyTVApp.renderLogin('Provider rejected the connection.')")
+        page.evaluate("OvelaApp.renderLogin('Provider rejected the connection.')")
         assert page.evaluate("document.activeElement.id") == 'loginConnect'
 
-        page.evaluate("XtreamlyTVApp.startDemo()")
+        page.evaluate("OvelaApp.startDemo()")
         page.wait_for_selector('.hero .focusable')
         assert page.locator('.shortcut-card b').count() == 0
         assert page.locator('[data-shortcut="live"] .shortcut-svg').count() == 1
@@ -81,11 +81,11 @@ def main() -> None:
 
         # Recently watched rows come from actual watch history, not merely loaded catalogs.
         page.evaluate("""() => {
-            XtreamlyTVStore.addRecent(XtreamlyTVMock.liveStreams[0], 'live');
-            XtreamlyTVStore.addRecent(XtreamlyTVMock.vodStreams[0], 'movie');
-            XtreamlyTVStore.addRecent(XtreamlyTVMock.series[0], 'series');
-            XtreamlyTVApp.state = XtreamlyTVStore.getState();
-            XtreamlyTVApp.renderHome();
+            OvelaStore.addRecent(OvelaMock.liveStreams[0], 'live');
+            OvelaStore.addRecent(OvelaMock.vodStreams[0], 'movie');
+            OvelaStore.addRecent(OvelaMock.series[0], 'series');
+            OvelaApp.state = OvelaStore.getState();
+            OvelaApp.renderHome();
         }""")
         home_text = page.locator('.scroll-view').inner_text()
         assert 'Continue watching Live TV' in home_text
@@ -104,25 +104,25 @@ def main() -> None:
 
         # Favorites use a persistent, reordered group shelf above the selected group's cards.
         custom_group_id = page.evaluate("""() => {
-            const live = XtreamlyTVMock.liveStreams[0];
-            const movie = XtreamlyTVMock.vodStreams[0];
-            const series = XtreamlyTVMock.series[0];
-            if (!XtreamlyTVStore.isFavorite('live', live.stream_id)) XtreamlyTVStore.toggleFavorite(live, 'live');
-            if (!XtreamlyTVStore.isFavorite('movie', movie.stream_id)) XtreamlyTVStore.toggleFavorite(movie, 'movie');
-            if (!XtreamlyTVStore.isFavorite('series', series.series_id)) XtreamlyTVStore.toggleFavorite(series, 'series');
-            const group = XtreamlyTVStore.saveFavoriteGroup({
+            const live = OvelaMock.liveStreams[0];
+            const movie = OvelaMock.vodStreams[0];
+            const series = OvelaMock.series[0];
+            if (!OvelaStore.isFavorite('live', live.stream_id)) OvelaStore.toggleFavorite(live, 'live');
+            if (!OvelaStore.isFavorite('movie', movie.stream_id)) OvelaStore.toggleFavorite(movie, 'movie');
+            if (!OvelaStore.isFavorite('series', series.series_id)) OvelaStore.toggleFavorite(series, 'series');
+            const group = OvelaStore.saveFavoriteGroup({
                 name: 'Weekend Picks',
                 icon: 'star',
                 color: 'rose',
                 itemKeys: [
-                    XtreamlyTVStore.favoriteKey('live', live.stream_id),
-                    XtreamlyTVStore.favoriteKey('movie', movie.stream_id)
+                    OvelaStore.favoriteKey('live', live.stream_id),
+                    OvelaStore.favoriteKey('movie', movie.stream_id)
                 ]
             });
-            XtreamlyTVApp.state = XtreamlyTVStore.getState();
-            XtreamlyTVApp.favoriteMode = 'home';
-            XtreamlyTVApp.favoriteGroupId = 'all';
-            XtreamlyTVApp.renderShell('favorites');
+            OvelaApp.state = OvelaStore.getState();
+            OvelaApp.favoriteMode = 'home';
+            OvelaApp.favoriteGroupId = 'all';
+            OvelaApp.renderShell('favorites');
             return group.id;
         }""")
         assert page.locator('.favorites-hub > .favorite-groups-static').count() == 1
@@ -153,13 +153,13 @@ def main() -> None:
         assert page.locator(f'[data-favorite-group="{custom_group_id}"].active').count() == 1
         assert page.locator('.favorite-content-section .section-head h2').inner_text() == 'Weekend Picks'
         assert page.locator('.favorite-recent-section').count() == 0
-        assert page.evaluate('XtreamlyTVApp.virtualGrid.columns') == 4
-        assert page.evaluate('XtreamlyTVApp.virtualGrid.visibleRows') == 3
+        assert page.evaluate('OvelaApp.virtualGrid.columns') == 4
+        assert page.evaluate('OvelaApp.virtualGrid.visibleRows') == 3
         assert page.locator('#favoriteGrid [data-content-type="movie"]').count() >= 1
 
         # The virtual grid measures an exact number of complete rows.
         grid_geometry = page.evaluate("""() => {
-            const grid = XtreamlyTVApp.virtualGrid;
+            const grid = OvelaApp.virtualGrid;
             const style = getComputedStyle(grid.container);
             const padding = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
             const used = grid.visibleRows * grid.rowHeight + (grid.visibleRows - 1) * grid.gap + padding;
@@ -191,9 +191,9 @@ def main() -> None:
         page.keyboard.press('ArrowUp')
         assert page.evaluate("document.activeElement.id") in {'favoriteManagerBack', 'favoriteManagerAdd'}
 
-        old_group_index = page.evaluate("id => XtreamlyTVStore.getState().favoriteGroupOrder.indexOf(id)", custom_group_id)
+        old_group_index = page.evaluate("id => OvelaStore.getState().favoriteGroupOrder.indexOf(id)", custom_group_id)
         page.click(f'[data-manager-group="{custom_group_id}"][data-manager-move="-1"]')
-        new_group_index = page.evaluate("id => XtreamlyTVStore.getState().favoriteGroupOrder.indexOf(id)", custom_group_id)
+        new_group_index = page.evaluate("id => OvelaStore.getState().favoriteGroupOrder.indexOf(id)", custom_group_id)
         assert new_group_index == old_group_index - 1
 
         page.click(f'[data-manager-items="{custom_group_id}"]')
@@ -204,7 +204,7 @@ def main() -> None:
         assert page.evaluate("document.activeElement.id") == 'favoriteItemManagerBack'
         first_key = page.locator('[data-item-manager-row]').first.get_attribute('data-item-manager-row')
         page.click(f'[data-item-manager-key="{first_key}"][data-item-manager-move="1"]')
-        saved_item_order = page.evaluate("id => XtreamlyTVStore.getState().favoriteItemOrders[id]", custom_group_id)
+        saved_item_order = page.evaluate("id => OvelaStore.getState().favoriteItemOrders[id]", custom_group_id)
         assert saved_item_order[1] == first_key
         page.click('#favoriteItemManagerBack')
 
@@ -214,8 +214,8 @@ def main() -> None:
         page.locator('#cancelFavoriteEditorTop').focus()
         page.keyboard.press('ArrowDown')
         assert page.evaluate("document.activeElement.id") == 'favoriteGroupName'
-        assert page.evaluate("XtreamlyTVApp.virtualGrid.columns") == 4
-        assert page.evaluate("XtreamlyTVApp.virtualGrid.visibleRows") == 3
+        assert page.evaluate("OvelaApp.virtualGrid.columns") == 4
+        assert page.evaluate("OvelaApp.virtualGrid.visibleRows") == 3
         assert page.locator('.favorite-editor').count() == 1
         page.click('#cancelFavoriteEditor')
         assert page.locator('.favorite-manager').count() == 1
@@ -227,14 +227,14 @@ def main() -> None:
         assert page.locator('.favorite-recent-section').count() == 0
         # Removing a favorite also removes stale membership and saved ordering.
         page.evaluate("""id => {
-            const live = XtreamlyTVMock.liveStreams[0];
-            XtreamlyTVStore.toggleFavorite(live, 'live');
-            XtreamlyTVApp.state = XtreamlyTVStore.getState();
+            const live = OvelaMock.liveStreams[0];
+            OvelaStore.toggleFavorite(live, 'live');
+            OvelaApp.state = OvelaStore.getState();
         }""", custom_group_id)
         assert page.evaluate("""id => {
-            const state = XtreamlyTVStore.getState();
+            const state = OvelaStore.getState();
             const group = state.favoriteGroups.find(entry => entry.id === id);
-            const liveKey = XtreamlyTVStore.favoriteKey('live', XtreamlyTVMock.liveStreams[0].stream_id);
+            const liveKey = OvelaStore.favoriteKey('live', OvelaMock.liveStreams[0].stream_id);
             return {
                 member:group.itemKeys.includes(liveKey),
                 ordered:(state.favoriteItemOrders[id] || []).includes(liveKey)
@@ -242,18 +242,18 @@ def main() -> None:
         }""", custom_group_id) == {'member': False, 'ordered': False}
 
         page.evaluate("""() => {
-            XtreamlyTVApp.favoriteMode = 'home';
-            XtreamlyTVApp.renderShell('live');
+            OvelaApp.favoriteMode = 'home';
+            OvelaApp.renderShell('live');
         }""")
         assert page.locator('[data-catalog-category="all"]').count() == 0
         assert 'All channels' not in page.locator('#categoryList').inner_text()
         page.click('[data-catalog-category="2"]')
         page.wait_for_selector("#catalogGrid .channel-tile")
-        assert page.evaluate("XtreamlyTVApp.virtualGrid.columns") == 4
-        assert page.evaluate("XtreamlyTVApp.virtualGrid.visibleRows") == 4
+        assert page.evaluate("OvelaApp.virtualGrid.columns") == 4
+        assert page.evaluate("OvelaApp.virtualGrid.visibleRows") == 4
         switch_info = page.evaluate("""() => {
-            const first = XtreamlyTVApp.currentFilteredItems.live[0];
-            const list = XtreamlyTVApp.buildChannelSwitchList(first, [first]);
+            const first = OvelaApp.currentFilteredItems.live[0];
+            const list = OvelaApp.buildChannelSwitchList(first, [first]);
             return {length:list.length, first:String(first.stream_id), second:list[1] && String(list[1].stream_id)};
         }""")
         assert switch_info['length'] > 1
@@ -263,16 +263,16 @@ def main() -> None:
         first_tile = page.locator('#catalogGrid .channel-tile').first
         first_tile.focus()
         first_id = first_tile.get_attribute('data-content-id')
-        page.evaluate("id => { if (XtreamlyTVStore.isFavorite('live', id)) { const item = XtreamlyTVApp.resolveItem('live', id); XtreamlyTVStore.toggleFavorite(item, 'live'); XtreamlyTVApp.state = XtreamlyTVStore.getState(); } }", first_id)
+        page.evaluate("id => { if (OvelaStore.isFavorite('live', id)) { const item = OvelaApp.resolveItem('live', id); OvelaStore.toggleFavorite(item, 'live'); OvelaApp.state = OvelaStore.getState(); } }", first_id)
         first_tile.focus()
         page.evaluate("document.dispatchEvent(new KeyboardEvent('keydown', {keyCode:403, bubbles:true}))")
-        assert page.evaluate("id => XtreamlyTVStore.isFavorite('live', id)", first_id)
+        assert page.evaluate("id => OvelaStore.isFavorite('live', id)", first_id)
         assert page.locator('#menuHint.visible').count() == 1
         assert float(page.evaluate("parseFloat(getComputedStyle(document.querySelector('#menuHintText')).marginLeft)")) >= 10
         assert float(page.evaluate("parseFloat(getComputedStyle(document.querySelector('.nav-item .nav-icon')).marginRight)")) >= 20
         assert float(page.evaluate("parseFloat(getComputedStyle(document.querySelector('.nav-item')).fontSize)")) >= 21
         page.evaluate("document.dispatchEvent(new KeyboardEvent('keydown', {keyCode:403, bubbles:true}))")
-        assert not page.evaluate("id => XtreamlyTVStore.isFavorite('live', id)", first_id)
+        assert not page.evaluate("id => OvelaStore.isFavorite('live', id)", first_id)
 
         result = page.evaluate(
             """() => {
@@ -287,9 +287,9 @@ def main() -> None:
                         _search: 'channel ' + index
                     });
                 }
-                XtreamlyTVApp.currentItems.live = items;
-                XtreamlyTVApp.searchText.live = '';
-                XtreamlyTVApp.updateCatalogGrid('live');
+                OvelaApp.currentItems.live = items;
+                OvelaApp.searchText.live = '';
+                OvelaApp.updateCatalogGrid('live');
                 return {
                     resultCount: document.querySelector('.result-count').textContent,
                     renderedTiles: document.querySelectorAll('#catalogGrid .channel-tile').length
@@ -301,15 +301,15 @@ def main() -> None:
 
         page.fill("#catalogSearch", "Channel 54999")
         page.wait_for_timeout(350)
-        assert page.locator(".result-count").inner_text() == "1 channels"
+        assert page.locator(".result-count").inner_text() == "1 channel"
 
         page.click('[data-view="movies"]')
         assert page.locator('[data-catalog-category="all"]').count() == 0
         assert 'All movies' not in page.locator('#categoryList').inner_text()
         page.click('[data-catalog-category="102"]')
         page.wait_for_selector("#catalogGrid .poster-card")
-        assert page.evaluate("XtreamlyTVApp.virtualGrid.columns") == 5
-        assert page.evaluate("XtreamlyTVApp.virtualGrid.visibleRows") == 2
+        assert page.evaluate("OvelaApp.virtualGrid.columns") == 5
+        assert page.evaluate("OvelaApp.virtualGrid.visibleRows") == 2
         page.locator("#catalogGrid .poster-card").first.click()
         page.wait_for_selector("#playMovie")
 

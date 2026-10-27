@@ -1,22 +1,13 @@
 (function () {
   'use strict';
 
-  var STATE_KEY = 'xtreamlytv.state.v1';
+  var STATE_KEY = 'io.github.speyll.ovela.state.v1';
   var DEFAULT_THEME = 'blue';
   var ALLOWED = ['teal','gray','purple','pink','blue'];
-  var THEME_META = { teal:'#071014', gray:'#101113', purple:'#10091b', pink:'#170a13', blue:'#07101d' };
-  var ASSETS = {
-    blue:'assets/xtreamlytv-wordmark-blue.svg',
-    teal:'assets/xtreamlytv-wordmark-teal.svg',
-    gray:'assets/xtreamlytv-wordmark-gray.svg',
-    purple:'assets/xtreamlytv-wordmark-purple.svg',
-    pink:'assets/xtreamlytv-wordmark-pink.svg'
-  };
+  // Ovela ships one dark appearance; a stored legacy theme still selects an
+  // accent, never a different wordmark.
+  var THEME_META = { teal:'#0B0B0D', gray:'#0E0E10', purple:'#0B0B0D', pink:'#0B0B0D', blue:'#0B0B0D' };
   var currentTheme = DEFAULT_THEME;
-  var startedAt = Date.now();
-  var minimumDuration = 2050;
-  var maximumDuration = 5000;
-  var ready = false;
   var finished = false;
   var appObserver = null;
   var brandObserver = null;
@@ -30,29 +21,13 @@
     } catch (error) { return DEFAULT_THEME; }
   }
 
-  function assetFor(theme) {
-    return ASSETS[ALLOWED.indexOf(theme) >= 0 ? theme : DEFAULT_THEME] || ASSETS.blue;
+  function assetFor() {
+    return '';
   }
 
-  function normalizeLegacyBrand() {
-    var logos = document.querySelectorAll('.theme-brand-logo');
-    Array.prototype.forEach.call(logos, function (logo) {
-      logo.classList.remove('theme-brand-logo');
-      logo.innerHTML = '<img class="brand-wordmark" src="' + assetFor(currentTheme) + '" alt="XtreamlyTV">';
-    });
-  }
-
-  function updateWordmarks(root) {
-    root = root || document;
-    normalizeLegacyBrand();
-    var images = root.querySelectorAll ? root.querySelectorAll('img.brand-wordmark') : [];
-    Array.prototype.forEach.call(images, function (image) {
-      var desired = assetFor(currentTheme);
-      if (image.getAttribute('src') !== desired) image.setAttribute('src', desired);
-    });
-    var startup = document.getElementById('xtStartupWordmark');
-    if (startup) startup.setAttribute('src', assetFor(currentTheme));
-  }
+  // The Ovela lockup is CSS, not an image, so there is nothing to swap when the
+  // accent changes. Kept as a no-op because older callers still invoke it.
+  function updateWordmarks() {}
 
   function applyBrand(theme) {
     currentTheme = ALLOWED.indexOf(theme) >= 0 ? theme : DEFAULT_THEME;
@@ -60,7 +35,7 @@
     return currentTheme;
   }
 
-  window.XtreamlyTVBrand = {
+  window.OvelaBrand = {
     apply:applyBrand,
     assetFor:assetFor,
     currentTheme:function () { return currentTheme; }
@@ -78,18 +53,18 @@
     if (!splash) {
       splash = document.createElement('div');
       splash.id = 'startupSplash';
-      splash.className = 'xt-startup';
+      splash.className = 'ovela-startup';
       document.body.appendChild(splash);
     }
-    splash.className = 'xt-startup';
+    splash.className = 'ovela-startup';
     splash.setAttribute('aria-hidden','true');
     splash.innerHTML =
-      '<div class="xt-startup-frame">' +
-        '<div class="xt-startup-lockup">' +
-          '<img id="xtStartupWordmark" class="xt-startup-wordmark" src="' + assetFor(currentTheme) + '" alt="XtreamlyTV">' +
-          '<span class="xt-startup-flare"></span>' +
+      '<div class="ovela-startup-frame">' +
+        '<div class="ovela-startup-lockup">' +
+          '<span class="ovela-mark" aria-hidden="true"></span>' +
+          '<img class="ovela-word" src="assets/ovela-wordmark.png" alt="Ovela" aria-hidden="true">' +
         '</div>' +
-        '<div class="xt-startup-status">Live<i></i>Movies<i></i>Series</div>' +
+        '<div class="ovela-startup-progress" aria-hidden="true"><i></i></div>' +
       '</div>';
     scaleSplash();
     return splash;
@@ -107,17 +82,6 @@
     splash.style.transform = Math.abs(scale - 1) < 0.001 ? 'none' : 'scale(' + scale + ')';
   }
 
-  function playSound() {
-    try {
-      var audio = new Audio('assets/startup-chime.mp3');
-      audio.preload = 'auto';
-      audio.volume = 0.46;
-      var result = audio.play();
-      if (result && typeof result.catch === 'function') result.catch(function () {});
-      window.__xtreamlyStartupAudio = audio;
-    } catch (error) {}
-  }
-
   function appHasMeaningfulContent() {
     var app = document.getElementById('app');
     return !!(app && app.firstElementChild && app.querySelector('.shell,.login-screen,.screen'));
@@ -131,27 +95,21 @@
     splash.classList.add('is-leaving');
     setTimeout(function () {
       if (splash && splash.parentNode) splash.parentNode.removeChild(splash);
-      window.__xtreamlyStartupAudio = null;
-    }, 520);
+    }, 260);
   }
 
-  function finishWhenAllowed() {
-    if (finished || !ready) return;
-    var remaining = minimumDuration - (Date.now() - startedAt);
-    if (remaining > 0) setTimeout(actuallyFinish, remaining);
-    else actuallyFinish();
+  function markReady() {
+    if (finished) return;
+    actuallyFinish();
   }
-
-  function markReady() { ready = true; finishWhenAllowed(); }
 
   function observeApp() {
     var app = document.getElementById('app');
     if (!app || typeof MutationObserver === 'undefined') {
-      setTimeout(markReady, minimumDuration);
+      setTimeout(markReady, 0);
       return;
     }
     appObserver = new MutationObserver(function () {
-      updateWordmarks(document);
       if (appHasMeaningfulContent()) {
         appObserver.disconnect();
         appObserver = null;
@@ -180,10 +138,11 @@
   updateWordmarks(document);
   observeBrandNodes();
   observeApp();
-  playSound();
   window.addEventListener('resize', scaleSplash);
 
-  setTimeout(function () { ready = true; actuallyFinish(); }, maximumDuration);
+  // Safety net only: if a provider or the app shell never renders a screen,
+  // show the shell rather than trapping the viewer on a black splash forever.
+  setTimeout(markReady, 8000);
 
-  window.XtreamlyTVStartup = { finish:markReady, theme:storedTheme };
+  window.OvelaStartup = { finish:markReady, theme:storedTheme };
 })();

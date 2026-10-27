@@ -42,7 +42,7 @@ def main() -> None:
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.set_content(inline_app(), wait_until="domcontentloaded")
 
-        page.evaluate("XtreamlyTVApp.renderLogin()")
+        page.evaluate("OvelaApp.renderLogin()")
         assert page.locator("#loginSourceType").count() == 1
         assert page.locator("#m3uFields").is_hidden()
         page.select_option("#loginSourceType", "m3u")
@@ -57,14 +57,14 @@ def main() -> None:
                     status: 200,
                     headers: { 'Content-Type': 'audio/x-mpegurl' }
                 });
-                XtreamlyTVApp.connect({
+                OvelaApp.connect({
                     sourceType: 'm3u',
                     playlistUrl: 'https://provider.example/playlist.m3u?token=secret',
                     alternateServers: ['https://backup.example:8443']
                 }, { apiProxy: '', streamFormat: 'auto' });
                 await new Promise(resolve => {
                     const timer = setInterval(() => {
-                        if (XtreamlyTVApp.api && XtreamlyTVApp.liveCategories.length) {
+                        if (OvelaApp.api && OvelaApp.liveCategories.length) {
                             clearInterval(timer);
                             resolve();
                         }
@@ -76,17 +76,17 @@ def main() -> None:
         assert page.locator("#app .screen").count() >= 1
 
         state = page.evaluate("""() => {
-            const live = XtreamlyTVApp.api.entries.find(entry => entry.content_type === 'live');
-            const movie = XtreamlyTVApp.api.entries.find(entry => entry.content_type === 'movie');
+            const live = OvelaApp.api.entries.find(entry => entry.content_type === 'live');
+            const movie = OvelaApp.api.entries.find(entry => entry.content_type === 'movie');
             return {
-                isM3u: XtreamlyTVApp.api instanceof XtreamlyTVM3uApi,
-                playlist: XtreamlyTVApp.api.playlistUrl,
-                liveCategories: XtreamlyTVApp.liveCategories.length,
+                isM3u: OvelaApp.api instanceof OvelaM3uApi,
+                playlist: OvelaApp.api.playlistUrl,
+                liveCategories: OvelaApp.liveCategories.length,
                 live: live.name,
                 movie: movie.name,
-                liveCandidates: XtreamlyTVApp.buildPlaybackCandidates(live, 'live').map(candidate => candidate.url),
-                movieCandidates: XtreamlyTVApp.buildPlaybackCandidates(movie, 'movie').map(candidate => candidate.url),
-                epg: XtreamlyTVApp.profile.epgUrls
+                liveCandidates: OvelaApp.buildPlaybackCandidates(live, 'live').map(candidate => candidate.url),
+                movieCandidates: OvelaApp.buildPlaybackCandidates(movie, 'movie').map(candidate => candidate.url),
+                epg: OvelaApp.profile.epgUrls
             };
         }""")
         assert state["isM3u"] is True
@@ -104,7 +104,7 @@ def main() -> None:
         ]
         assert state["epg"] == ["https://epg.example/guide.xml"]
 
-        page.evaluate("XtreamlyTVApp.renderSettings()")
+        page.evaluate("OvelaApp.renderSettings()")
         summary = page.locator(".provider-summary").inner_text()
         assert "token=secret" not in summary
         assert "provider.example" in summary
