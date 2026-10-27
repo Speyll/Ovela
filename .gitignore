@@ -53,7 +53,7 @@ test-results/
 # Local toolchains, evidence, and machine-local state
 .dev/
 
-# Unpacked brand reference assets (too large for history; see packages/brand/README.md)
+# Unpacked brand reference assets (too large for history)
 packages/brand/ovela-source-pack/
 
 # Packet captures and ad-hoc file backups (never source assets)

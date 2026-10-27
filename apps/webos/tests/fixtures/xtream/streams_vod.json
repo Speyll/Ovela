@@ -1,0 +1,16 @@
+[
+  {
+    "num": "1",
+    "name": "Fixture Movie",
+    "stream_type": "movie",
+    "stream_id": 2001,
+    "stream_icon": "http://127.0.0.1:18080/assets/poster.png",
+    "rating": "7.5",
+    "rating_5based": 3.75,
+    "added": "1700000000",
+    "category_id": "10",
+    "container_extension": "mp4",
+    "custom_sid": "",
+    "direct_source": ""
+  }
+]

@@ -1,175 +1,111 @@
 # Ovela
 
-Ovela is an open-source, remote-first IPTV client for living-room televisions.
-It connects to user-supplied Xtream-compatible providers or M3U/M3U+ playlists
-and presents Live TV, Movies, and Series in a fast, category-scoped interface
-built for very large catalogs.
+Ovela is a small, open-source IPTV client for the living room. It plays Xtream
+Codes and M3U playlists on LG webOS TVs and Android TV / Google TV, and it can
+also be installed on an Android phone.
 
-> Ovela does not provide channels, subscriptions, playlists, or copyrighted
-> media. Use it only with services and content you are authorized to access.
-
-## Platform status
-
-| Platform | Version | Package | Playback |
-|---|---|---|---|
-| LG webOS TV | **1.0.0** | `.ipk` | Native webOS media surface |
-| Android TV / Google TV | **1.0.0** | Signed `.apk` for sideloading | AndroidX Media3 ExoPlayer |
-| Local browser demo | Development only | Static files | Browser media support |
-
-Download packages from
-[GitHub Releases](https://github.com/Speyll/Ovela/releases/latest).
-
-The Android APK is a release build signed for sideloading. It is not published
-through Google Play. An existing installation signed with a different key must
-be uninstalled first, which removes app data. The webOS package is installed in
-developer mode and is not signed for the LG Content Store.
+Ovela ships with no channels, playlists, or subscriptions. You connect it to a
+provider you already have.
 
 ## Features
 
-- Xtream account authentication
-- M3U/M3U+ playlist import from a URL on both platforms, plus local playlist
-  import on Android TV
-- Explicit alternate-host failover for Xtream and M3U streams
-- Category-scoped Live TV, VOD, and Series browsing
-- Bounded large-catalog navigation with readable category lists, flat Live TV
-  channels, and poster rails
-- Favorites virtual categories, custom collections, default A-Z sorting, and
-  editable group management
-- Movie and episode resume positions on webOS and Android TV
-- Live HLS/MPEG-TS fallback on both TV platforms
-- Native Media3 playback on Android TV
-- Remote-first navigation and visible focus states
-- A shared graphite/ivory Ovela theme, with saved legacy skin preferences mapped
-  onto it
-- Editable provider settings, catalog cache controls, local history, and privacy
-  controls
-- Optional LAN API bridge for providers that block browser CORS, including an
-  allowlisted M3U playlist endpoint
-- No advertising, analytics, or tracking
+- Live TV, movies, and series with a remote-friendly interface
+- Xtream Codes and M3U sources, including alternate-server failover
+- Favourites, watch progress, and a continue-watching row
+- Built-in player controls, subtitles, and stream-format selection
 
-## Monorepo layout
+## Build
 
-```text
-apps/
-  webos/          LG webOS packaged app
-  android-tv/     Native Android TV / Google TV app
-  api-bridge/     Optional local metadata/CORS bridge
-packages/
-  core-web/       Shared browser/webOS Xtream, M3U, recovery, and persistence
-  contracts/      Platform-neutral JSON schemas and fixtures
-  design-tokens/  Shared brand, spacing, color, and motion tokens
-  brand/          Canonical project artwork
-scripts/          Build, install, synchronization, and release helpers
-docs/             Architecture, development, testing, and release guides
-.github/          CI, release workflows, templates, and dependency updates
-```
+You need Node.js 20 or newer.
 
-The repository shares provider contracts, brand assets, design tokens, fixtures,
-and web-compatible domain primitives. Playback and UI shells remain
-platform-native so each television platform can use its best-supported media
-engine.
-
-## Quick start
-
-### Prerequisites
-
-- Git
-- Node.js 20 or newer
-- Python 3.11+ for browser smoke tests
-- LG webOS CLI for webOS builds
-- Android Studio or Android SDK/JDK 17 for Android TV builds
-
-Prepare generated platform files and run the fast checks:
-
-```bash
+```sh
 npm run prepare:apps
-npm run check:versions
-npm run check:webos
-npm run test:core
 ```
 
-### Build webOS
+### LG webOS
 
-```bash
+Install the webOS CLI once:
+
+```sh
 npm install -g @webos-tools/cli
+```
+
+Then build and install:
+
+```sh
 npm run build:webos
+ares-install --device tv1 dist/webos/io.github.speyll.ovela_1.0.0_all.ipk
 ```
 
-Output:
+`ares-setup-device` and developer mode on the TV are required the first time.
 
-```text
-dist/webos/io.github.speyll.ovela_1.0.0_all.ipk
+### Android TV / phone
+
+You need JDK 17 and Android SDK 36.
+
+```sh
+npm run build:android
+adb install -r apps/android-tv/app/build/outputs/apk/release/app-release.apk
 ```
 
-### Build Android TV
+Release builds are signed so they can be installed directly. By default the
+Android debug key is used. To sign with your own key, create
+`apps/android-tv/keystore.properties`:
 
-Set up signing once as described in
-[Releasing](docs/releasing.md#android-signing), then:
-
-```bash
-cd apps/android-tv
-./gradlew :app:assembleRelease
+```properties
+storeFile=/path/to/ovela-release.jks
+storePassword=...
+keyAlias=ovela
+keyPassword=...
 ```
 
-Windows:
+The same values can be supplied as `OVELA_KEYSTORE_FILE`,
+`OVELA_KEYSTORE_PASSWORD`, `OVELA_KEYSTORE_ALIAS`, and
+`OVELA_KEYSTORE_KEY_PASSWORD`. Keep the keystore and its passwords out of Git; an
+existing install can only be updated by a build signed with the same key.
 
-```powershell
-cd apps\android-tv
-.\gradlew.bat :app:assembleRelease
+## Test
+
+```sh
+npm run check
+npm run test:webos
 ```
 
-Output:
+The webOS browser tests need Python 3.12 and Playwright:
 
-```text
-apps/android-tv/app/build/outputs/apk/release/app-release.apk
+```sh
+python3 -m pip install -r apps/webos/tests/requirements.txt
+python3 -m playwright install chromium
 ```
 
-## Documentation
+They run in desktop Chromium against the production webOS code. They are not a
+claim about TV firmware behaviour.
 
-- [Getting started](docs/getting-started.md)
-- [Architecture](docs/architecture.md)
-- [Build and test on LG webOS](docs/development/webos.md)
-- [Build and test on Android TV / Google TV](docs/development/android-tv.md)
-- [Debugging and diagnostics](docs/development/debugging.md)
-- [Releasing and signing](docs/releasing.md)
-- [Ovela product and parity notes](docs/design/ovela.md)
-- [Ovela asset family](docs/design/ovela-assets.md)
-- [Contributing](CONTRIBUTING.md)
-- [Security policy](SECURITY.md)
-- [Privacy](PRIVACY.md)
-- [Changelog](CHANGELOG.md)
+## Licence
 
-## Category classification and hidden categories
+Apache License 2.0. See [LICENSE](LICENSE).
 
-Category names are classified by the shared rule table in
-`packages/category-classification.json`, generated into both clients. Matching
-uses normalized whole tokens, so `EN|`, `ENGLISH` and `English Movies` are
-recognized while `Entertainment` is not. Prefixes are preserved as their own
-group; language, quality/format and provider/region metadata are shown on each
-row and exposed through independent Group, Language and Quality filters. Names
-with several language markers or no reliable match remain under Other /
-Unclassified rather than being guessed.
+Ovela is derived from [XtreamlyTV](https://github.com/joshcoburn/XtreamlyTV),
+Copyright (c) 2026 XtreamlyTV Contributors, which was distributed under the MIT
+License:
 
-Hiding a category removes it from browse, Home and Favourites and drops that
-category's loaded list and derived item references. Favorites, Continue
-Watching, history, progress and the active playback item are kept separately.
-Re-showing it loads the category again on demand. This is category-scoped
-cleanup, not a full-playlist download or a claim of measured RAM, CPU, network
-or storage savings. Artwork already decoded by the platform and provider-side
-data are outside the app's control.
+> Permission is hereby granted, free of charge, to any person obtaining a copy
+> of this software and associated documentation files (the "Software"), to deal
+> in the Software without restriction, including without limitation the rights
+> to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+> copies of the Software, and to permit persons to whom the Software is
+> furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all
+> copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+> IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+> FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+> AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+> LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+> OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+> SOFTWARE.
 
-## Development principles
-
-1. Never fetch a provider's entire catalog unless the API offers no
-   category-scoped alternative.
-2. Keep remote navigation deterministic and visibly focused.
-3. Use platform-native playback where practical.
-4. Never ship provider credentials, playlists, or copyrighted content.
-5. Treat provider responses as untrusted and inconsistent.
-6. Keep logs free of passwords and authenticated stream URLs.
-
-## License
-
-Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
-Third-party attributions are listed in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The bundled Inter and Arimo fonts are licensed under the SIL Open Font License;
+their licence files ship in `assets/licenses/` inside both apps.

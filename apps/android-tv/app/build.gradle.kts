@@ -9,7 +9,8 @@ plugins {
 
 // Release signing material is never committed. Provide either
 // apps/android-tv/keystore.properties (gitignored) or the OVELA_KEYSTORE_*
-// environment variables. Without them, release builds are unsigned.
+// environment variables. Without them the release build falls back to the
+// Android debug key so the APK is still signed and installable.
 val keystoreProperties = Properties().apply {
     val propertiesFile = rootProject.file("keystore.properties")
     if (propertiesFile.exists()) propertiesFile.inputStream().use { load(it) }
@@ -62,7 +63,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfigs.findByName("release")?.let { signingConfig = it }
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
         }
     }
 

@@ -1,0 +1,20 @@
+[
+  {
+    "num": "1",
+    "name": "Fixture Series",
+    "series_id": 3001,
+    "cover": "http://127.0.0.1:18080/assets/poster.png",
+    "plot": "Fixture-only series.",
+    "cast": "Fixture Cast",
+    "director": "Fixture Director",
+    "genre": "Drama",
+    "releaseDate": "2024-01-01",
+    "last_modified": "1700000000",
+    "rating": "8.0",
+    "rating_5based": 4.0,
+    "backdrop_path": [],
+    "youtube_trailer": "",
+    "episode_run_time": "45",
+    "category_id": "20"
+  }
+]

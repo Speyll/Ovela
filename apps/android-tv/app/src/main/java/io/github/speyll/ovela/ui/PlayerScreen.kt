@@ -340,7 +340,7 @@ fun PlayerScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                val kind = PlaybackRecoveryPolicy.classifyPlayerErrorCode(error.errorCode)
+                val kind = PlaybackRecoveryPolicy.classifyPlaybackException(error)
                 recover(kind, error.message ?: "Unable to play this stream.")
             }
         }

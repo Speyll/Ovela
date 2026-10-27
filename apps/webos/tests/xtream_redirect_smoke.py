@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, urlparse
 from playwright.sync_api import sync_playwright
 
 APP_ROOT = Path(__file__).resolve().parents[1] / "app"
-MEDIA_ROOT = Path(__file__).resolve().parents[3] / ".dev" / "testing" / "fixtures" / "media"
+MEDIA_ROOT = Path(__file__).resolve().parent / "fixtures" / "media"
 LIVE_PATH = "/live/demo/demo-pass/1001.m3u8"
 MOVIE_PATH = "/movie/demo/demo-pass/2001.mp4"
 

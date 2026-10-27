@@ -11,8 +11,7 @@ from urllib.request import urlopen
 from playwright.sync_api import sync_playwright
 
 APP_ROOT = Path(__file__).resolve().parents[1] / "app"
-REPO_ROOT = Path(__file__).resolve().parents[3]
-PROVIDER = REPO_ROOT / ".dev" / "testing" / "scripts" / "mock_provider.py"
+PROVIDER = Path(__file__).resolve().parent / "mock_provider.py"
 
 
 def inline_app() -> str:

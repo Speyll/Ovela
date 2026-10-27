@@ -13,7 +13,7 @@ import threading
 from playwright.sync_api import sync_playwright
 
 APP_ROOT = Path(__file__).resolve().parents[1] / "app"
-MEDIA_ROOT = Path(__file__).resolve().parents[3] / ".dev" / "testing" / "fixtures" / "media"
+MEDIA_ROOT = Path(__file__).resolve().parent / "fixtures" / "media"
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
@@ -48,7 +48,7 @@ def start_media_server():
 
 
 def main() -> None:
-    assert (MEDIA_ROOT / "clip.mp4").is_file(), "run generate-media-fixtures.sh first"
+    assert (MEDIA_ROOT / "clip.mp4").is_file(), "media fixtures are missing from apps/webos/tests/fixtures/media"
     server = start_media_server()
     base = f"http://127.0.0.1:{server.server_address[1]}"
     try:

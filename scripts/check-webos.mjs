@@ -11,7 +11,7 @@ for (const name of files) {
   new vm.Script(source, { filename: name });
 }
 
-const rootVersion = (await readFile(path.join(root, 'VERSION'), 'utf8')).trim();
+const rootVersion = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8')).version;
 const index = await readFile(path.join(app, 'index.html'), 'utf8');
 // The v0.7 shell remains the production webOS surface, so keep validating it.
 for (const asset of ['css/v0.7-ui.css', 'css/legacy-layout.css', 'js/v0.7-ui.js']) {

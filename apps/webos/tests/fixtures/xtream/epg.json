@@ -1,0 +1,16 @@
+{
+  "epg_listings": [
+    {
+      "id": "epg-1",
+      "epg_id": "fixture-news",
+      "title": "Fixture News Hour",
+      "description": "Synthetic EPG entry for local tests.",
+      "start": "1700000000",
+      "end": "1700003600",
+      "start_timestamp": "1700000000",
+      "stop_timestamp": "1700003600",
+      "now_playing": 1,
+      "has_archive": 0
+    }
+  ]
+}

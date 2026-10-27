@@ -1,0 +1,26 @@
+{
+  "info": {
+    "name": "Fixture Series",
+    "cover": "http://127.0.0.1:18080/assets/poster.png",
+    "plot": "Fixture-only series.",
+    "genre": "Drama",
+    "releasedate": "2024-01-01",
+    "rating": "8.0",
+    "backdrop_path": []
+  },
+  "episodes": {
+    "1": [
+      {
+        "id": "3001-1-1",
+        "episode_id": "3001-1-1",
+        "episode_num": 1,
+        "title": "Fixture Episode",
+        "container_extension": "mp4",
+        "info": {
+          "movie_image": "http://127.0.0.1:18080/assets/poster.png",
+          "plot": "Fixture-only episode."
+        }
+      }
+    ]
+  }
+}

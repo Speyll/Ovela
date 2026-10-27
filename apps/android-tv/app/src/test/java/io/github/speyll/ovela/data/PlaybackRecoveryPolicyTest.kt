@@ -83,10 +83,6 @@ class PlaybackRecoveryPolicyTest {
     @Test
     fun classifiesActionablePlayerErrorsAsPermanent() {
         assertEquals(
-            PlaybackFailureKind.UNSUPPORTED,
-            PlaybackRecoveryPolicy.classifyPlayerErrorCode(PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE),
-        )
-        assertEquals(
             PlaybackFailureKind.NOT_FOUND,
             PlaybackRecoveryPolicy.classifyPlayerErrorCode(PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND),
         )
@@ -95,16 +91,52 @@ class PlaybackRecoveryPolicyTest {
             PlaybackRecoveryPolicy.classifyPlayerErrorCode(PlaybackException.ERROR_CODE_IO_NO_PERMISSION),
         )
         assertEquals(
-            PlaybackFailureKind.UNSUPPORTED,
-            PlaybackRecoveryPolicy.classifyPlayerErrorCode(PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED),
-        )
-        assertEquals(
             PlaybackFailureKind.AUTH,
             PlaybackRecoveryPolicy.classifyPlayerErrorCode(PlaybackException.ERROR_CODE_AUTHENTICATION_EXPIRED),
         )
         assertEquals(
             PlaybackFailureKind.UNSUPPORTED,
             PlaybackRecoveryPolicy.classifyPlayerErrorCode(PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED),
+        )
+        assertEquals(
+            PlaybackFailureKind.UNSUPPORTED,
+            PlaybackRecoveryPolicy.classifyPlayerErrorCode(
+                PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
+            ),
+        )
+    }
+
+    @Test
+    fun doesNotBlameTheFormatForProviderOrDecoderFailures() {
+        assertEquals(
+            PlaybackFailureKind.UNKNOWN,
+            PlaybackRecoveryPolicy.classifyPlayerErrorCode(
+                PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
+            ),
+        )
+        assertEquals(
+            PlaybackFailureKind.UNKNOWN,
+            PlaybackRecoveryPolicy.classifyPlayerErrorCode(
+                PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED,
+            ),
+        )
+        assertEquals(
+            PlaybackFailureKind.UNKNOWN,
+            PlaybackRecoveryPolicy.classifyPlayerErrorCode(
+                PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+            ),
+        )
+        assertEquals(
+            PlaybackFailureKind.TRANSIENT,
+            PlaybackRecoveryPolicy.classifyPlayerErrorCode(
+                PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+            ),
+        )
+        assertEquals(
+            PlaybackFailureKind.TRANSIENT,
+            PlaybackRecoveryPolicy.classifyPlayerErrorCode(
+                PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED,
+            ),
         )
     }
 

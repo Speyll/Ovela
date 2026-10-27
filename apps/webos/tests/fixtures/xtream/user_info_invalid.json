@@ -1,0 +1,10 @@
+{
+  "user_info": {
+    "username": "demo",
+    "password": "wrong",
+    "message": "Invalid username or password",
+    "auth": 0,
+    "status": "Disabled",
+    "exp_date": null
+  }
+}

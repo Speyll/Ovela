@@ -1,0 +1,32 @@
+{
+  "info": {
+    "name": "Fixture Movie",
+    "o_name": "Fixture Movie",
+    "movie_image": "http://127.0.0.1:18080/assets/poster.png",
+    "cover_big": "http://127.0.0.1:18080/assets/poster.png",
+    "plot": "Fixture-only movie plot.",
+    "genre": "Drama",
+    "releasedate": "2024-01-01",
+    "duration_secs": "5400",
+    "rating": "7.5",
+    "director": "Fixture Director",
+    "cast": "Fixture Cast",
+    "country": "Testland",
+    "youtube_trailer": "",
+    "tmdb_id": "0",
+    "video": {
+      "height": 1080
+    },
+    "audio": {
+      "channels": 2,
+      "channel_layout": "Stereo"
+    }
+  },
+  "movie_data": {
+    "stream_id": 2001,
+    "name": "Fixture Movie",
+    "container_extension": "mp4",
+    "stream_icon": "http://127.0.0.1:18080/assets/poster.png",
+    "direct_source": ""
+  }
+}
